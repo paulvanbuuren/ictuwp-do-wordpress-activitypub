@@ -106,9 +106,14 @@ class Nodeinfo {
 			'outbound' => array(),
 		);
 
+		// Very much confusion, so very headache
+		// blog name and blog description are disregarded in favor of something more informative
+		$nodeName = 'nodeName ' . \get_bloginfo( 'name' );
+		$nodeDescription = 'nodeName ' . \get_bloginfo( 'description' );
+
 		$nodeinfo['metadata'] = array(
-			'nodeName' => \get_bloginfo( 'name' ),
-			'nodeDescription' => \get_bloginfo( 'description' ),
+			'nodeName' => $nodeName,
+			'nodeDescription' => $nodeDescription,
 			'nodeIcon' => \get_site_icon_url(),
 		);
 
