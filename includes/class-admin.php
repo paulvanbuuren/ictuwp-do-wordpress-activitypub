@@ -304,7 +304,7 @@ class Admin {
 			'activitypub_blog_name',
 			array(
 				'type' => 'string',
-				'description' => \esc_html__( 'The Description of the Blog-User', 'activitypub' ),
+				'description' => \esc_html__( 'The name of the blog as displayed on the AP profile', 'activitypub' ),
 				'show_in_rest' => true,
 				'default' => '',
 			)
