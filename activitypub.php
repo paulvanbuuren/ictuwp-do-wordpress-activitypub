@@ -1,8 +1,8 @@
 <?php
 /**
- * Plugin Name: ActivityPub
- * Plugin URI: https://github.com/pfefferle/wordpress-activitypub/
- * Description: The ActivityPub protocol is a decentralized social networking protocol based upon the ActivityStreams 2.0 data format.
+ * Plugin Name: ActivityPub (modified for digitaleoverheid.nl)
+ * Plugin URI: https://github.com/paulvanbuuren/ictuwp-do-wordpress-activitypub/
+ * Description: The ActivityPub protocol is a decentralized social networking protocol based upon the ActivityStreams 2.0 data format. (PvB: added extra field: activitypub_blog_name)
  * Version: 3.1.0
  * Author: Matthias Pfefferle & Automattic
  * Author URI: https://automattic.com/
