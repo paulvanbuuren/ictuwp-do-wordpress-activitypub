@@ -144,7 +144,7 @@
 									type="text" value="<?php echo esc_html( \get_option( 'activitypub_blog_name', get_bloginfo( 'name' ) ) ) ?>">
 							</label>
 							<p class="description">
-								<?php \esc_html_e( 'By default the ActivityPub plugin uses the WordPress site name as a value for the blog name.', 'activitypub' ); ?>
+								<?php \esc_html_e( 'By default the ActivityPub plugin uses the WordPress site name as a value for the AP Blog-Profile.', 'activitypub' ); ?>
 							</p>
 						</td>
 					</tr>
