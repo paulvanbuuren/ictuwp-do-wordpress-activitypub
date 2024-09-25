@@ -210,8 +210,7 @@ function is_comment() {
 	if ( ! is_null( $comment_id ) ) {
 		$comment = \get_comment( $comment_id );
 
-		// Only return local origin comments
-		if ( $comment && $comment->user_id ) {
+		if ( $comment ) {
 			return $comment_id;
 		}
 	}
@@ -657,11 +656,11 @@ function get_active_users( $duration = 1 ) {
 
 	// if blog user is disabled
 	if ( is_user_disabled( Users::BLOG_USER_ID ) ) {
-		return $count;
+		return (int) $count;
 	}
 
 	// also count blog user
-	return $count + 1;
+	return (int) $count + 1;
 }
 
 /**
@@ -689,10 +688,10 @@ function get_total_users() {
 
 	// if blog user is disabled
 	if ( is_user_disabled( Users::BLOG_USER_ID ) ) {
-		return $users;
+		return (int) $users;
 	}
 
-	return $users + 1;
+	return (int) $users + 1;
 }
 
 /**
@@ -1211,5 +1210,29 @@ function generate_post_summary( $post, $length = 500 ) {
 		$content = $content[0] . ' ' . $excerpt_more;
 	}
 
+	/* Removed until this is merged: https://github.com/mastodon/mastodon/pull/28629
 	return \apply_filters( 'the_excerpt', $content );
+	*/
+	return $content;
+}
+
+/**
+ * Get the content warning of a post.
+ *
+ * @param int $post_id The post ID.
+ *
+ * @return string|false The content warning or false if not found.
+ */
+function get_content_warning( $post_id ) {
+	$post = get_post( $post_id );
+	if ( ! $post ) {
+		return false;
+	}
+
+	$warning = get_post_meta( $post->ID, 'activitypub_content_warning', true );
+	if ( empty( $warning ) ) {
+		return false;
+	}
+
+	return $warning;
 }
