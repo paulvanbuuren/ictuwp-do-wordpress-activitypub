@@ -1,10 +1,10 @@
 <?php
 /**
- * Plugin Name: ActivityPub
- * Plugin URI: https://github.com/pfefferle/wordpress-activitypub/
+ * Plugin Name:	ActivityPub (ICTU WP corrections)
+ * Plugin URI: https://github.com/paulvanbuuren/ictuwp-do-wordpress-activitypub/
  * Description: The ActivityPub protocol is a decentralized social networking protocol based upon the ActivityStreams 2.0 data format.
  * Version: 3.3.0
- * Author: Matthias Pfefferle & Automattic
+ * Author: Matthias Pfefferle, Automattic (modifications: Paul van Buuren)
  * Author URI: https://automattic.com/
  * License: MIT
  * License URI: http://opensource.org/licenses/MIT
