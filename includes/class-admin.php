@@ -70,8 +70,8 @@ class Admin {
 		// user has to be able to publish posts
 		if ( ! is_user_disabled( get_current_user_id() ) ) {
 			$followers_list_page = \add_users_page(
-				\__( 'Followers', 'activitypub' ),
-				\__( 'Followers', 'activitypub' ),
+				\__( '⁂ Followers', 'activitypub' ),
+				\__( '⁂ Followers', 'activitypub' ),
 				'read',
 				'activitypub-followers-list',
 				array(
@@ -86,8 +86,8 @@ class Admin {
 			);
 
 			\add_users_page(
-				\__( 'Extra Fields', 'activitypub' ),
-				\__( 'Extra Fields', 'activitypub' ),
+				\__( '⁂ Extra Fields', 'activitypub' ),
+				\__( '⁂ Extra Fields', 'activitypub' ),
 				'read',
 				\esc_url( \admin_url( '/edit.php?post_type=ap_extrafield' ) )
 			);
@@ -113,7 +113,9 @@ class Admin {
 		if ( 'edit' === $current_screen->base && Extra_Fields::is_extra_fields_post_type( $current_screen->post_type ) ) {
 			?>
 			<div class="notice" style="margin: 0; background: none; border: none; box-shadow: none; padding: 15px 0 0 0; font-size: 14px;">
-				<?php esc_html_e( 'These are extra fields that are used for your ActivityPub profile. You can use your homepage, social profiles, pronouns, age, anything you want.', 'activitypub' ); ?>
+				<?php
+					esc_html_e( 'These are extra fields that are used for your ActivityPub profile. You can use your homepage, social profiles, pronouns, age, anything you want.', 'activitypub' );
+				?>
 			</div>
 			<?php
 		}
@@ -508,7 +510,7 @@ class Admin {
 
 				$post = get_post( $arg[2] );
 
-				if ( Extra_Fields::is_extra_fields_post_type( $post->post_type ) ) {
+				if ( ! Extra_Fields::is_extra_field_post_type( $post->post_type ) ) {
 					return $allcaps;
 				}
 
