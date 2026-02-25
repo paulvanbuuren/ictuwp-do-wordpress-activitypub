@@ -376,6 +376,18 @@ class Options {
 
 		\register_setting(
 			'activitypub_blog',
+			'activitypub_blog_name',
+			array(
+				'type'              => 'string',
+				'description'       => 'The display name of the blog.',
+				'show_in_rest'      => true,
+				'default'           => Blog::get_name(),
+				'sanitize_callback' => array( Sanitize::class, 'blog_identifier' ),
+			)
+		);
+
+		\register_setting(
+			'activitypub_blog',
 			'activitypub_header_image',
 			array(
 				'type'        => 'integer',

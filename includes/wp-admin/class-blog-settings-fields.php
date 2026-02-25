@@ -76,6 +76,15 @@ class Blog_Settings_Fields {
 		);
 
 		\add_settings_field(
+			'activitypub_blog_name',
+			\__( 'Display name', 'activitypub' ),
+			array( self::class, 'blog_name_callback' ),
+			'activitypub_blog_settings',
+			'activitypub_blog_profile',
+			array( 'label_for' => 'activitypub_blog_name' )
+		);
+
+		\add_settings_field(
 			'activitypub_notifications',
 			\esc_html__( 'Email Notifications', 'activitypub' ),
 			array( self::class, 'notifications_callback' ),
@@ -211,6 +220,20 @@ class Blog_Settings_Fields {
 		</label>
 		<p class="description">
 			<?php esc_html_e( 'By default the ActivityPub plugin uses the WordPress tagline as a description for the blog profile.', 'activitypub' ); ?>
+		</p>
+		<?php
+	}
+
+	/**
+	 * Alternative blog name field callback.
+	 */
+	public static function blog_name_callback() {
+		?>
+		<label for="activitypub_blog_name">
+			<input id="activitypub_blog_name" name="activitypub_blog_name" type="text" value="<?php echo esc_attr( get_option( 'activitypub_blog_name', get_bloginfo( 'name' ) ) ); ?>" />
+		</label>
+		<p class="description">
+			<?php esc_html_e( 'The default name is taken from the blog name.', 'activitypub' ); ?>
 		</p>
 		<?php
 	}
