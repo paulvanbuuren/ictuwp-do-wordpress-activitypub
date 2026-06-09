@@ -76,6 +76,14 @@ class Blog_Settings_Fields {
 		);
 
 		\add_settings_field(
+			'activitypub_blog_name',
+			\__( 'Blog Display Name', 'activitypub' ),
+			array( self::class, 'settings_field_blog_name' ),
+			'activitypub_blog_settings',
+			'activitypub_blog_profile' // use the same section slug as the description field
+		);
+
+		\add_settings_field(
 			'activitypub_notifications',
 			\esc_html__( 'Email Notifications', 'activitypub' ),
 			array( self::class, 'notifications_callback' ),
@@ -211,6 +219,31 @@ class Blog_Settings_Fields {
 		</label>
 		<p class="description">
 			<?php esc_html_e( 'By default the ActivityPub plugin uses the WordPress tagline as a description for the blog profile.', 'activitypub' ); ?>
+		</p>
+		<?php
+	}
+
+	/**
+	 * Render the blog display name settings field.
+	 */
+	public static function settings_field_blog_name() {
+		$value = \get_option( 'activitypub_blog_name', \get_option( 'blogname' ) );
+		?>
+		<input
+			type="text"
+			name="activitypub_blog_name"
+			id="activitypub_blog_name"
+			value="<?php echo \esc_attr( $value ); ?>"
+			class="regular-text"
+		/>
+		<p class="description">
+			<?php
+			\esc_html_e(
+				'Overwrite the blog display name shown on the ActivityPub profile. Defaults to the site title.',
+				'activitypub'
+			);
+			?>
+			(<a href="<?php echo \esc_url( \admin_url( 'options-general.php' ) ); ?>"><?php \esc_html_e( 'edit site title', 'activitypub' ); ?></a>)
 		</p>
 		<?php
 	}
