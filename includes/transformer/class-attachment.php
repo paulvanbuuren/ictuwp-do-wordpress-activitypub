@@ -1,10 +1,14 @@
 <?php
+/**
+ * Attachment Transformer Class file.
+ *
+ * @package Activitypub
+ */
+
 namespace Activitypub\Transformer;
 
-use Activitypub\Transformer\Post;
-
 /**
- * WordPress Attachment Transformer
+ * WordPress Attachment Transformer.
  *
  * The Attachment Transformer is responsible for transforming a WP_Post object into different other
  * Object-Types.
@@ -12,6 +16,10 @@ use Activitypub\Transformer\Post;
  * Currently supported are:
  *
  * - Activitypub\Activity\Base_Object
+ *
+ * Redaction is inherited from {@see Post::is_redacted()}: `is_post_publicly_queryable()`
+ * already resolves an attachment's own visibility, password, post-type support, and — for
+ * attached media — its parent's visibility, so no attachment-specific override is needed.
  */
 class Attachment extends Post {
 	/**
@@ -20,13 +28,16 @@ class Attachment extends Post {
 	 * @return array The Attachments.
 	 */
 	protected function get_attachment() {
-		$mime_type  = get_post_mime_type( $this->wp_object->ID );
-		$media_type = preg_replace( '/(\/[a-zA-Z]+)/i', '', $mime_type );
+		$mime_type       = \get_post_mime_type( $this->item->ID );
+		$mime_type_parts = \explode( '/', $mime_type );
+		$type            = '';
 
-		switch ( $media_type ) {
+		switch ( $mime_type_parts[0] ) {
 			case 'audio':
+				$type = 'Audio';
+				break;
 			case 'video':
-				$type = 'Document';
+				$type = 'Video';
 				break;
 			case 'image':
 				$type = 'Image';
@@ -35,11 +46,11 @@ class Attachment extends Post {
 
 		$attachment = array(
 			'type'      => $type,
-			'url'       => wp_get_attachment_url( $this->wp_object->ID ),
+			'url'       => wp_get_attachment_url( $this->item->ID ),
 			'mediaType' => $mime_type,
 		);
 
-		$alt = \get_post_meta( $this->wp_object->ID, '_wp_attachment_image_alt', true );
+		$alt = \get_post_meta( $this->item->ID, '_wp_attachment_image_alt', true );
 		if ( $alt ) {
 			$attachment['name'] = $alt;
 		}

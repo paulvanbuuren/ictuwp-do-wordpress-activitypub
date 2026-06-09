@@ -3,16 +3,13 @@
  * Inspired by the PHP ActivityPub Library by @Landrok
  *
  * @link https://github.com/landrok/activitypub
+ *
+ * @package Activitypub
  */
 
 namespace Activitypub\Activity;
 
-use WP_Error;
-use ReflectionClass;
-use DateTime;
-
-use function Activitypub\camel_to_snake_case;
-use function Activitypub\snake_to_camel_case;
+use Activitypub\Activity\Extended_Object\Place;
 
 /**
  * Base_Object is an implementation of one of the
@@ -25,26 +22,176 @@ use function Activitypub\snake_to_camel_case;
  * 'Base_' for this reason.
  *
  * @see https://www.w3.org/TR/activitystreams-core/#object
+ *
+ * @method array|string|null       get_attachment()         Gets the attachment property of the object.
+ * @method array|string|null       get_attributed_to()      Gets the entity attributed as the original author.
+ * @method string|null             get_audience()           Gets the total population of entities for which the object can be considered relevant.
+ * @method string[]|string|null    get_bcc()                Gets the private secondary audience of the object.
+ * @method string[]|string|null    get_bto()                Gets the private primary audience of the object.
+ * @method string[]|string|null    get_cc()                 Gets the secondary recipients of the object.
+ * @method string|null             get_content()            Gets the content property of the object.
+ * @method string[]|null           get_content_map()        Gets the content map property of the object.
+ * @method string|null             get_context()            Gets the context within which the object exists.
+ * @method array|null              get_dcterms()            Gets the Dublin Core terms property of the object.
+ * @method string|null             get_duration()           Gets the duration property of time-bound resources.
+ * @method string|null             get_end_time()           Gets the date and time describing the ending time of the object.
+ * @method string|null             get_generator()          Gets the entity that generated the object.
+ * @method string[]|null           get_icon()               Gets the icon property of the object.
+ * @method string|null             get_id()                 Gets the object's unique global identifier.
+ * @method string[]|null           get_image()              Gets the image property of the object.
+ * @method string[]|string|null    get_in_reply_to()        Gets the objects this object is in reply to.
+ * @method array|null              get_interaction_policy() Gets the interaction policy property of the object.
+ * @method array|null              get_likes()              Gets the collection of likes for this object.
+ * @method array|string|null|Place get_location()           Gets the physical or logical locations associated with the object.
+ * @method string|null             get_media_type()         Gets the MIME media type of the content property.
+ * @method string|null             get_name()               Gets the natural language name of the object.
+ * @method string[]|null           get_name_map()           Gets the name map property of the object.
+ * @method string|null             get_preview()            Gets the entity that provides a preview of this object.
+ * @method string|null             get_published()          Gets the date and time the object was published in ISO 8601 format.
+ * @method string|null             get_quote()              Gets the quote property of the object (FEP-044f).
+ * @method string|null             get_quote_url()          Gets the quoteUrl property of the object.
+ * @method string|null             get_quote_uri()          Gets the quoteUri property of the object.
+ * @method string|null             get__misskey_quote()     Gets the _misskey_quote property of the object.
+ * @method string|array|null       get_replies()            Gets the collection of responses to this object.
+ * @method bool|null               get_sensitive()          Gets the sensitive property of the object.
+ * @method array|null              get_shares()             Gets the collection of shares for this object.
+ * @method array|null              get_source()             Gets the source property indicating content markup derivation.
+ * @method string|null             get_start_time()         Gets the date and time describing the starting time of the object.
+ * @method string|null             get_summary()            Gets the natural language summary of the object.
+ * @method string[]|null           get_summary_map()        Gets the summary map property of the object.
+ * @method array[]|null            get_tag()                Gets the tag property of the object.
+ * @method string[]|string|null    get_to()                 Gets the primary recipients of the object.
+ * @method string                  get_type()               Gets the type of the object.
+ * @method string|null             get_updated()            Gets the date and time the object was updated in ISO 8601 format.
+ * @method string|null             get_url()                Gets the URL of the object.
+ * @method string|null             get_former_type()        Gets the former type of a Tombstone object.
+ * @method string|null             get_deleted()            Gets the date and time the object was deleted in ISO 8601 format.
+ *
+ * @method string|string[] add_cc( string|array $cc ) Adds one or more entities to the secondary audience of the object.
+ * @method string|string[] add_to( string|array $to ) Adds one or more entities to the primary audience of the object.
+ *
+ * @method Base_Object set_attachment( array $attachment )             Sets the attachment property of the object.
+ * @method Base_Object set_attributed_to( string $attributed_to )      Sets the entity attributed as the original author.
+ * @method Base_Object set_audience( string $audience )                Sets the total population of entities for which the object can be considered relevant.
+ * @method Base_Object set_bcc( array|string $bcc )                    Sets the private secondary audience of the object.
+ * @method Base_Object set_bto( array|string $bto )                    Sets the private primary audience of the object.
+ * @method Base_Object set_cc( array|string $cc )                      Sets the secondary recipients of the object.
+ * @method Base_Object set_content( string $content )                  Sets the content property of the object.
+ * @method Base_Object set_content_map( array $content_map )           Sets the content property of the object.
+ * @method Base_Object set_context( string $context )                  Sets the context within which the object exists.
+ * @method Base_Object set_dcterms( array $dcterms )                   Sets the Dublin Core terms property of the object.
+ * @method Base_Object set_duration( string $duration )                Sets the duration property of time-bound resources.
+ * @method Base_Object set_end_time( string $end_time )                Sets the date and time describing the ending time of the object.
+ * @method Base_Object set_generator( string $generator )              Sets the entity that generated the object.
+ * @method Base_Object set_icon( array $icon )                         Sets the icon property of the object.
+ * @method Base_Object set_id( string $id )                            Sets the object's unique global identifier.
+ * @method Base_Object set_image( array $image )                       Sets the image property of the object.
+ * @method Base_Object set_in_reply_to( string|string[] $in_reply_to ) Sets the is in reply to property of the object.
+ * @method Base_Object set_interaction_policy( array|null $policy )    Sets the interaction policy property of the object.
+ * @method Base_Object set_likes( array $likes )                       Sets the collection of likes for this object.
+ * @method Base_Object set_location( array|string|Place $location )    Sets the physical or logical locations associated with the object.
+ * @method Base_Object set_media_type( string $media_type )            Sets the MIME media type of the content property.
+ * @method Base_Object set_name( string $name )                        Sets the natural language name of the object.
+ * @method Base_Object set_name_map( array|null $name_map )            Sets the name map property of the object.
+ * @method Base_Object set_preview( string $preview )                  Sets the entity that provides a preview of this object.
+ * @method Base_Object set_published( string|null $published )         Sets the date and time the object was published in ISO 8601 format.
+ * @method Base_Object set_quote( string $quote )                      Sets the quote property of the object (FEP-044f).
+ * @method Base_Object set_quote_url( string $quote_url )              Sets the quoteUrl property of the object.
+ * @method Base_Object set_quote_uri( string $quote_uri )              Sets the quoteUri property of the object.
+ * @method Base_Object set__misskey_quote( mixed $misskey_quote )      Sets the _misskey_quote property of the object.
+ * @method Base_Object set_replies( string|array $replies )            Sets the collection of responses to this object.
+ * @method Base_Object set_sensitive( bool|null $sensitive )           Sets the sensitive property of the object.
+ * @method Base_Object set_shares( array $shares )                     Sets the collection of shares for this object.
+ * @method Base_Object set_source( array $source )                     Sets the source property indicating content markup derivation.
+ * @method Base_Object set_start_time( string $start_time )            Sets the date and time describing the starting time of the object.
+ * @method Base_Object set_summary( string $summary )                  Sets the natural language summary of the object.
+ * @method Base_Object set_summary_map( array|null $summary_map )      Sets the summary property of the object.
+ * @method Base_Object set_tag( array|null $tag )                      Sets the tag property of the object.
+ * @method Base_Object set_to( string|string[] $to )                   Sets the primary recipients of the object.
+ * @method Base_Object set_type( string $type )                        Sets the type of the object.
+ * @method Base_Object set_updated( string $updated )                  Sets the date and time the object was updated in ISO 8601 format.
+ * @method Base_Object set_url( string $url )                          Sets the URL of the object.
+ * @method Base_Object set_former_type( string $former_type )          Sets the former type of a Tombstone object.
+ * @method Base_Object set_deleted( string $deleted )                  Sets the date and time the object was deleted in ISO 8601 format.
  */
-class Base_Object {
+class Base_Object extends Generic_Object {
+	/**
+	 * The JSON-LD context for the object.
+	 *
+	 * @var array
+	 */
 	const JSON_LD_CONTEXT = array(
 		'https://www.w3.org/ns/activitystreams',
 		array(
-			'Hashtag'   => 'as:Hashtag',
-			'sensitive' => 'as:sensitive',
+			'Hashtag'           => 'as:Hashtag',
+			'sensitive'         => 'as:sensitive',
+			'dcterms'           => 'http://purl.org/dc/terms/',
+			'gts'               => 'https://gotosocial.org/ns#',
+			'schema'            => 'http://schema.org/',
+			'exifData'          => 'schema:exifData',
+			'PropertyValue'     => 'schema:PropertyValue',
+			'interactionPolicy' => array(
+				'@id'   => 'gts:interactionPolicy',
+				'@type' => '@id',
+			),
+			'canQuote'          => array(
+				'@id'   => 'gts:canQuote',
+				'@type' => '@id',
+			),
+			'canReply'          => array(
+				'@id'   => 'gts:canReply',
+				'@type' => '@id',
+			),
+			'canLike'           => array(
+				'@id'   => 'gts:canLike',
+				'@type' => '@id',
+			),
+			'canAnnounce'       => array(
+				'@id'   => 'gts:canAnnounce',
+				'@type' => '@id',
+			),
+			'automaticApproval' => array(
+				'@id'   => 'gts:automaticApproval',
+				'@type' => '@id',
+			),
+			'manualApproval'    => array(
+				'@id'   => 'gts:manualApproval',
+				'@type' => '@id',
+			),
+			'always'            => array(
+				'@id'   => 'gts:always',
+				'@type' => '@id',
+			),
+			'toot'              => 'http://joinmastodon.org/ns#',
+			'blurhash'          => 'toot:blurhash',
 		),
 	);
 
 	/**
-	 * The object's unique global identifier
+	 * The default types for Objects.
 	 *
-	 * @see https://www.w3.org/TR/activitypub/#obj-id
+	 * @see https://www.w3.org/TR/activitystreams-vocabulary/#object-types
 	 *
-	 * @var string
+	 * @var array
 	 */
-	protected $id;
+	const TYPES = array(
+		'Article',
+		'Audio',
+		'Document',
+		'Event',
+		'Image',
+		'Note',
+		'Page',
+		'Place',
+		'Profile',
+		'Relationship',
+		'Tombstone',
+		'Video',
+	);
 
 	/**
+	 * The type of the object.
+	 *
 	 * @var string
 	 */
 	protected $type = 'Object';
@@ -57,12 +204,7 @@ class Base_Object {
 	 *
 	 * @see https://www.w3.org/TR/activitystreams-vocabulary/#dfn-attachment
 	 *
-	 * @var string
-	 *    | ObjectType
-	 *    | Link
-	 *    | array<ObjectType>
-	 *    | array<Link>
-	 *    | null
+	 * @var string|null
 	 */
 	protected $attachment;
 
@@ -73,27 +215,17 @@ class Base_Object {
 	 *
 	 * @see https://www.w3.org/TR/activitystreams-vocabulary/#dfn-attributedto
 	 *
-	 * @var string
-	 *    | ObjectType
-	 *    | Link
-	 *    | array<ObjectType>
-	 *    | array<Link>
-	 *    | null
+	 * @var string|null
 	 */
 	protected $attributed_to;
 
 	/**
 	 * One or more entities that represent the total population of
-	 * entities for which the object can considered to be relevant.
+	 * entities for which the object can be considered to be relevant.
 	 *
 	 * @see https://www.w3.org/TR/activitystreams-vocabulary/#dfn-audience
 	 *
-	 * @var string
-	 *    | ObjectType
-	 *    | Link
-	 *    | array<ObjectType>
-	 *    | array<Link>
-	 *    | null
+	 * @var string|null
 	 */
 	protected $audience;
 
@@ -123,10 +255,7 @@ class Base_Object {
 	 *
 	 * @see https://www.w3.org/TR/activitystreams-vocabulary/#dfn-context
 	 *
-	 * @var string
-	 *    | ObjectType
-	 *    | Link
-	 *    | null
+	 * @var string|null
 	 */
 	protected $context;
 
@@ -139,6 +268,25 @@ class Base_Object {
 	 * @var array|null
 	 */
 	protected $content_map;
+
+	/**
+	 * The date and time at which the object was deleted.
+	 *
+	 * @see https://www.w3.org/TR/activitystreams-vocabulary/#dfn-deleted
+	 *
+	 * @var string|null
+	 */
+	protected $deleted;
+
+	/**
+	 * The former type of the object. Used in Tombstone objects to
+	 * indicate the type of the object prior to deletion.
+	 *
+	 * @see https://www.w3.org/TR/activitystreams-vocabulary/#dfn-formertype
+	 *
+	 * @var string|null
+	 */
+	protected $former_type;
 
 	/**
 	 * A simple, human-readable, plain-text name for the object.
@@ -187,12 +335,7 @@ class Base_Object {
 	 *
 	 * @see https://www.w3.org/TR/activitystreams-vocabulary/#dfn-icon
 	 *
-	 * @var string
-	 *    | Image
-	 *    | Link
-	 *    | array<Image>
-	 *    | array<Link>
-	 *    | null
+	 * @var string|array|null
 	 */
 	protected $icon;
 
@@ -203,12 +346,7 @@ class Base_Object {
 	 *
 	 * @see https://www.w3.org/TR/activitystreams-vocabulary/#dfn-image-term
 	 *
-	 * @var string
-	 *    | Image
-	 *    | Link
-	 *    | array<Image>
-	 *    | array<Link>
-	 *    | null
+	 * @var string|array|null
 	 */
 	protected $image;
 
@@ -218,12 +356,7 @@ class Base_Object {
 	 *
 	 * @see https://www.w3.org/TR/activitystreams-vocabulary/#dfn-inreplyto
 	 *
-	 * @var string
-	 *    | ObjectType
-	 *    | Link
-	 *    | array<ObjectType>
-	 *    | array<Link>
-	 *    | null
+	 * @var string|null
 	 */
 	protected $in_reply_to;
 
@@ -233,12 +366,7 @@ class Base_Object {
 	 *
 	 * @see https://www.w3.org/TR/activitystreams-vocabulary/#dfn-location
 	 *
-	 * @var string
-	 *    | ObjectType
-	 *    | Link
-	 *    | array<ObjectType>
-	 *    | array<Link>
-	 *    | null
+	 * @var string|null|Place
 	 */
 	protected $location;
 
@@ -247,10 +375,7 @@ class Base_Object {
 	 *
 	 * @see https://www.w3.org/TR/activitystreams-vocabulary/#dfn-preview
 	 *
-	 * @var string
-	 *    | ObjectType
-	 *    | Link
-	 *    | null
+	 * @var string|null
 	 */
 	protected $preview;
 
@@ -282,10 +407,7 @@ class Base_Object {
 	 *
 	 * @see https://www.w3.org/TR/activitystreams-vocabulary/#dfn-summary
 	 *
-	 * @var string
-	 *    | ObjectType
-	 *    | Link
-	 *    | null
+	 * @var string|null
 	 */
 	protected $summary;
 
@@ -295,7 +417,7 @@ class Base_Object {
 	 *
 	 * @see https://www.w3.org/TR/activitystreams-vocabulary/#dfn-summary
 	 *
-	 * @var array<string>|null
+	 * @var string[]|null
 	 */
 	protected $summary_map;
 
@@ -308,12 +430,7 @@ class Base_Object {
 	 *
 	 * @see https://www.w3.org/TR/activitystreams-vocabulary/#dfn-tag
 	 *
-	 * @var string
-	 *    | ObjectType
-	 *    | Link
-	 *    | array<ObjectType>
-	 *    | array<Link>
-	 *    | null
+	 * @var string|null
 	 */
 	protected $tag;
 
@@ -329,11 +446,7 @@ class Base_Object {
 	/**
 	 * One or more links to representations of the object.
 	 *
-	 * @var string
-	 *    | array<string>
-	 *    | Link
-	 *    | array<Link>
-	 *    | null
+	 * @var string|null
 	 */
 	protected $url;
 
@@ -343,12 +456,7 @@ class Base_Object {
 	 *
 	 * @see https://www.w3.org/TR/activitystreams-vocabulary/#dfn-to
 	 *
-	 * @var string
-	 *    | ObjectType
-	 *    | Link
-	 *    | array<ObjectType>
-	 *    | array<Link>
-	 *    | null
+	 * @var string|array|null
 	 */
 	protected $to;
 
@@ -358,12 +466,7 @@ class Base_Object {
 	 *
 	 * @see https://www.w3.org/TR/activitystreams-vocabulary/#dfn-bto
 	 *
-	 * @var string
-	 *    | ObjectType
-	 *    | Link
-	 *    | array<ObjectType>
-	 *    | array<Link>
-	 *    | null
+	 * @var string|array|null
 	 */
 	protected $bto;
 
@@ -373,12 +476,7 @@ class Base_Object {
 	 *
 	 * @see https://www.w3.org/TR/activitystreams-vocabulary/#dfn-cc
 	 *
-	 * @var string
-	 *    | ObjectType
-	 *    | Link
-	 *    | array<ObjectType>
-	 *    | array<Link>
-	 *    | null
+	 * @var string|array|null
 	 */
 	protected $cc;
 
@@ -388,12 +486,7 @@ class Base_Object {
 	 *
 	 * @see https://www.w3.org/TR/activitystreams-vocabulary/#dfn-bcc
 	 *
-	 * @var string
-	 *    | ObjectType
-	 *    | Link
-	 *    | array<ObjectType>
-	 *    | array<Link>
-	 *    | null
+	 * @var string|array|null
 	 */
 	protected $bcc;
 
@@ -410,9 +503,9 @@ class Base_Object {
 
 	/**
 	 * When the object describes a time-bound resource, such as an audio
-	 * or video, a meeting, etc, the duration property indicates the
+	 * or video, a meeting, etc., the duration property indicates the
 	 * object's approximate duration.
-	 * The value MUST be expressed as an xsd:duration as defined by
+	 * The value MUST be expressed as a xsd:duration as defined by
 	 * xmlschema11-2, section 3.3.6 (e.g. a period of 5 seconds is
 	 * represented as "PT5S").
 	 *
@@ -429,7 +522,7 @@ class Base_Object {
 	 *
 	 * @see https://www.w3.org/TR/activitypub/#source-property
 	 *
-	 * @var ObjectType
+	 * @var array|null
 	 */
 	protected $source;
 
@@ -439,12 +532,29 @@ class Base_Object {
 	 *
 	 * @see https://www.w3.org/TR/activitystreams-vocabulary/#dfn-replies
 	 *
-	 * @var string
-	 *    | Collection
-	 *    | Link
-	 *    | null
+	 * @var string|array|null
 	 */
 	protected $replies;
+
+	/**
+	 * A Collection containing objects considered to be likes for
+	 * this object.
+	 *
+	 * @see https://www.w3.org/TR/activitypub/#likes
+	 *
+	 * @var array|null
+	 */
+	protected $likes;
+
+	/**
+	 * A Collection containing objects considered to be shares for
+	 * this object.
+	 *
+	 * @see https://www.w3.org/TR/activitypub/#shares
+	 *
+	 * @var array|null
+	 */
+	protected $shares;
 
 	/**
 	 * Used to mark an object as containing sensitive content.
@@ -453,55 +563,69 @@ class Base_Object {
 	 *
 	 * @see https://docs.joinmastodon.org/spec/activitypub/#sensitive
 	 *
-	 * @var boolean
+	 * @var boolean|null
 	 */
-	protected $sensitive = false;
+	protected $sensitive;
 
 	/**
-	 * Magic function to implement getter and setter
+	 * The dcterms namespace.
 	 *
-	 * @param string $method The method name.
-	 * @param string $params The method params.
+	 * @see https://codeberg.org/fediverse/fep/src/branch/main/fep/b2b8/fep-b2b8.md#sensitive
+	 * @see https://www.dublincore.org/specifications/dublin-core/dcmi-terms/
 	 *
-	 * @return void
+	 * @var array|null
 	 */
-	public function __call( $method, $params ) {
-		$var = \strtolower( \substr( $method, 4 ) );
-
-		if ( \strncasecmp( $method, 'get', 3 ) === 0 ) {
-			if ( ! $this->has( $var ) ) {
-				return new WP_Error( 'invalid_key', __( 'Invalid key', 'activitypub' ), array( 'status' => 404 ) );
-			}
-
-			return $this->$var;
-		}
-
-		if ( \strncasecmp( $method, 'set', 3 ) === 0 ) {
-			return $this->set( $var, $params[0] );
-		}
-
-		if ( \strncasecmp( $method, 'add', 3 ) === 0 ) {
-			$this->add( $var, $params[0] );
-		}
-	}
+	protected $dcterms;
 
 	/**
-	 * Magic function, to transform the object to string.
+	 * Interaction policy is an attempt to limit the harmful effects of unwanted replies and
+	 * other interactions on a user's posts (e.g., "reply guys").
 	 *
-	 * @return string The object id.
+	 * It is also used by Mastodon to limit the ability to quote posts.
+	 *
+	 * @see https://docs.gotosocial.org/en/latest/federation/interaction_policy/
+	 * @see https://blog.joinmastodon.org/2025/09/introducing-quote-posts/
+	 *
+	 * @var array|null
 	 */
-	public function __toString() {
-		return $this->to_string();
-	}
+	protected $interaction_policy;
 
 	/**
-	 * Function to transform the object to string.
+	 * Fediverse Enhancement Proposal 044f: Quote Property
 	 *
-	 * @return string The object id.
+	 * @see https://codeberg.org/fediverse/fep/src/branch/main/fep/044f/fep-044f.md
+	 * @see https://w3id.org/fep/044f#quote
+	 *
+	 * @var string|null
 	 */
-	public function to_string() {
-		return $this->get_id();
-	}
+	protected $quote;
+
+	/**
+	 * ActivityStreams quoteUrl property.
+	 *
+	 * @see https://www.w3.org/ns/activitystreams#quoteUrl
+	 *
+	 * @var string|null
+	 */
+	protected $quote_url;
+
+	/**
+	 * Fedibird-specific quoteUri property.
+	 *
+	 * @see https://fedibird.com/ns#quoteUri
+	 *
+	 * @var string|null
+	 */
+	protected $quote_uri;
+
+	/**
+	 * Misskey-specific quote property.
+	 *
+	 * @see https://misskey-hub.net/ns/#_misskey_quote
+	 *
+	 * @var string|null
+	 */
+	protected $_misskey_quote; // phpcs:ignore PSR2.Classes.PropertyDeclaration.Underscore
 
 	/**
 	 * Generic getter.
@@ -512,21 +636,10 @@ class Base_Object {
 	 */
 	public function get( $key ) {
 		if ( ! $this->has( $key ) ) {
-			return new WP_Error( 'invalid_key', __( 'Invalid key', 'activitypub' ), array( 'status' => 404 ) );
+			return new \WP_Error( 'invalid_key', __( 'Invalid key', 'activitypub' ), array( 'status' => 404 ) );
 		}
 
-		return call_user_func( array( $this, 'get_' . $key ) );
-	}
-
-	/**
-	 * Check if the object has a key
-	 *
-	 * @param string $key The key to check.
-	 *
-	 * @return boolean True if the object has the key.
-	 */
-	public function has( $key ) {
-		return property_exists( $this, $key );
+		return parent::get( $key );
 	}
 
 	/**
@@ -539,12 +652,10 @@ class Base_Object {
 	 */
 	public function set( $key, $value ) {
 		if ( ! $this->has( $key ) ) {
-			return new WP_Error( 'invalid_key', __( 'Invalid key', 'activitypub' ), array( 'status' => 404 ) );
+			return new \WP_Error( 'invalid_key', __( 'Invalid key', 'activitypub' ), array( 'status' => 404 ) );
 		}
 
-		$this->$key = $value;
-
-		return $this;
+		return parent::set( $key, $value );
 	}
 
 	/**
@@ -557,170 +668,9 @@ class Base_Object {
 	 */
 	public function add( $key, $value ) {
 		if ( ! $this->has( $key ) ) {
-			return new WP_Error( 'invalid_key', __( 'Invalid key', 'activitypub' ), array( 'status' => 404 ) );
+			return new \WP_Error( 'invalid_key', __( 'Invalid key', 'activitypub' ), array( 'status' => 404 ) );
 		}
 
-		if ( ! isset( $this->$key ) ) {
-			$this->$key = array();
-		}
-
-		$attributes   = $this->$key;
-		$attributes[] = $value;
-
-		$this->$key = $attributes;
-
-		return $this->$key;
-	}
-
-	/**
-	 * Convert JSON input to an array.
-	 *
-	 * @return string The JSON string.
-	 *
-	 * @return \Activitypub\Activity\Base_Object An Object built from the JSON string.
-	 */
-	public static function init_from_json( $json ) {
-		$array = \json_decode( $json, true );
-
-		if ( ! is_array( $array ) ) {
-			$array = array();
-		}
-
-		return self::init_from_array( $array );
-	}
-
-	/**
-	 * Convert JSON input to an array.
-	 *
-	 * @return string The object array.
-	 *
-	 * @return \Activitypub\Activity\Base_Object An Object built from the JSON string.
-	 */
-	public static function init_from_array( $array ) {
-		if ( ! is_array( $array ) ) {
-			return new WP_Error( 'invalid_array', __( 'Invalid array', 'activitypub' ), array( 'status' => 404 ) );
-		}
-
-		$object = new static();
-
-		foreach ( $array as $key => $value ) {
-			$key = camel_to_snake_case( $key );
-			call_user_func( array( $object, 'set_' . $key ), $value );
-		}
-
-		return $object;
-	}
-
-	/**
-	 * Convert JSON input to an array and pre-fill the object.
-	 *
-	 * @param string $json The JSON string.
-	 */
-	public function from_json( $json ) {
-		$array = \json_decode( $json, true );
-
-		$this->from_array( $array );
-	}
-
-	/**
-	 * Convert JSON input to an array and pre-fill the object.
-	 *
-	 * @param array $array The array.
-	 */
-	public function from_array( $array ) {
-		foreach ( $array as $key => $value ) {
-			if ( $value ) {
-				$key = camel_to_snake_case( $key );
-				call_user_func( array( $this, 'set_' . $key ), $value );
-			}
-		}
-	}
-
-	/**
-	 * Convert Object to an array.
-	 *
-	 * It tries to get the object attributes if they exist
-	 * and falls back to the getters. Empty values are ignored.
-	 *
-	 * @param bool $include_json_ld_context Whether to include the JSON-LD context. Default true.
-	 *
-	 * @return array An array built from the Object.
-	 */
-	public function to_array( $include_json_ld_context = true ) {
-		$array = array();
-		$vars  = get_object_vars( $this );
-
-		foreach ( $vars as $key => $value ) {
-			// ignotre all _prefixed keys.
-			if ( '_' === substr( $key, 0, 1 ) ) {
-				continue;
-			}
-
-			// if value is empty, try to get it from a getter.
-			if ( ! $value ) {
-				$value = call_user_func( array( $this, 'get_' . $key ) );
-			}
-
-			if ( is_object( $value ) ) {
-				$value = $value->to_array( false );
-			}
-
-			// if value is still empty, ignore it for the array and continue.
-			if ( isset( $value ) ) {
-				$array[ snake_to_camel_case( $key ) ] = $value;
-			}
-		}
-
-		if ( $include_json_ld_context ) {
-			// Get JsonLD context and move it to '@context' at the top.
-			$array = array_merge( array( '@context' => $this->get_json_ld_context() ), $array );
-		}
-
-		$class = new ReflectionClass( $this );
-		$class = strtolower( $class->getShortName() );
-
-		$array = \apply_filters( 'activitypub_activity_object_array', $array, $class, $this->id, $this );
-		$array = \apply_filters( "activitypub_activity_{$class}_object_array", $array, $this->id, $this );
-
-		return $array;
-	}
-
-	/**
-	 * Convert Object to JSON.
-	 *
-	 * @param bool $include_json_ld_context Whether to include the JSON-LD context. Default true.
-	 *
-	 * @return string The JSON string.
-	 */
-	public function to_json( $include_json_ld_context = true ) {
-		$array   = $this->to_array( $include_json_ld_context );
-		$options = \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_QUOT;
-
-		/*
-		* Options to be passed to json_encode()
-		*
-		* @param int $options The current options flags
-		*/
-		$options = \apply_filters( 'activitypub_json_encode_options', $options );
-
-		return \wp_json_encode( $array, $options );
-	}
-
-	/**
-	 * Returns the keys of the object vars.
-	 *
-	 * @return array The keys of the object vars.
-	 */
-	public function get_object_var_keys() {
-		return \array_keys( \get_object_vars( $this ) );
-	}
-
-	/**
-	 * Returns the JSON-LD context of this object.
-	 *
-	 * @return array $context A compacted JSON-LD context for the ActivityPub object.
-	 */
-	public function get_json_ld_context() {
-		return static::JSON_LD_CONTEXT;
+		return parent::add( $key, $value );
 	}
 }

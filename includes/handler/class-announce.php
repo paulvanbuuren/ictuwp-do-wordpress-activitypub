@@ -1,80 +1,102 @@
 <?php
+/**
+ * Announce handler file.
+ *
+ * @package Activitypub
+ */
+
 namespace Activitypub\Handler;
 
-use Activitypub\Http;
-use Activitypub\Comment;
+use Activitypub\Collection\Actors;
 use Activitypub\Collection\Interactions;
+use Activitypub\Comment;
+use Activitypub\Http;
 
-use function Activitypub\object_to_uri;
+use function Activitypub\is_activity;
 use function Activitypub\is_activity_public;
+use function Activitypub\object_to_uri;
 
 /**
- * Handle Create requests
+ * Handle Create requests.
  */
 class Announce {
 	/**
-	 * Initialize the class, registering WordPress hooks
+	 * Initialize the class, registering WordPress hooks.
 	 */
 	public static function init() {
-		\add_action(
-			'activitypub_inbox_announce',
-			array( self::class, 'handle_announce' ),
-			10,
-			3
-		);
+		\add_action( 'activitypub_inbox_announce', array( self::class, 'handle_announce' ), 10, 3 );
 	}
 
 	/**
-	 * Handles "Announce" requests
+	 * Handles "Announce" requests.
 	 *
-	 * @param array                $array    The activity-object
-	 * @param int                  $user_id  The id of the local blog-user
-	 * @param Activitypub\Activity $activity The activity object
-	 *
-	 * @return void
+	 * @param array                          $announcement The activity-object.
+	 * @param int|int[]                      $user_ids     The id(s) of the local blog-user(s).
+	 * @param \Activitypub\Activity\Activity $activity     The activity object.
 	 */
-	public static function handle_announce( $array, $user_id, $activity = null ) { // phpcs:ignore Universal.NamingConventions.NoReservedKeywordParameterNames.arrayFound
-		// check if Activity is public or not
-		if ( ! is_activity_public( $array ) ) {
+	public static function handle_announce( $announcement, $user_ids, $activity = null ) {
+		// Check if Activity is public or not.
+		if ( ! is_activity_public( $announcement ) ) {
 			// @todo maybe send email
 			return;
 		}
 
-		if ( ! ACTIVITYPUB_DISABLE_REACTIONS ) {
-			self::maybe_save_announce( $array, $user_id, $activity );
+		// Ignore announces from the blog actor.
+		if ( Actors::BLOG_USER_ID === Actors::get_id_by_resource( $announcement['actor'] ) ) {
+			return;
 		}
 
-		if ( is_string( $array['object'] ) ) {
-			$object = Http::get_remote_object( $array['object'] );
+		// Check if reposts are allowed.
+		if ( ! Comment::is_comment_type_enabled( 'repost' ) ) {
+			return;
+		}
+
+		self::maybe_save_announce( $announcement, $user_ids );
+
+		if ( is_string( $announcement['object'] ) ) {
+			$object = Http::get_remote_object( $announcement['object'] );
 		} else {
-			$object = $array['object'];
+			$object = $announcement['object'];
 		}
 
 		if ( ! $object || is_wp_error( $object ) ) {
 			return;
 		}
 
-		if ( ! isset( $object['type'] ) ) {
+		if ( ! is_activity( $object ) ) {
 			return;
 		}
 
 		$type = \strtolower( $object['type'] );
 
-		\do_action( 'activitypub_inbox', $object, $user_id, $type, $activity );
-		\do_action( "activitypub_inbox_{$type}", $object, $user_id, $activity );
+		/**
+		 * Fires after an Announce has been received.
+		 *
+		 * @param array                               $object   The object.
+		 * @param int[]                               $user_ids The ids of the local blog-users.
+		 * @param string                              $type     The type of the activity.
+		 * @param \Activitypub\Activity\Activity|null $activity The activity object.
+		 */
+		\do_action( 'activitypub_inbox', $object, (array) $user_ids, $type, $activity );
+
+		/**
+		 * Fires after an Announce of a specific type has been received.
+		 *
+		 * @param array                               $object   The object.
+		 * @param int[]                               $user_ids The ids of the local blog-users.
+		 * @param \Activitypub\Activity\Activity|null $activity The activity object.
+		 */
+		\do_action( "activitypub_inbox_{$type}", $object, (array) $user_ids, $activity );
 	}
 
 	/**
-	 * Try to save the Announce
+	 * Try to save the Announce.
 	 *
-	 * @param array                $array    The activity-object
-	 * @param int                  $user_id  The id of the local blog-user
-	 * @param Activitypub\Activity $activity The activity object
-	 *
-	 * @return void
+	 * @param array     $activity The activity-object.
+	 * @param int|int[] $user_ids The id of the local blog-user.
 	 */
-	public static function maybe_save_announce( $array, $user_id, $activity ) { // phpcs:ignore
-		$url = object_to_uri( $array['object'] );
+	public static function maybe_save_announce( $activity, $user_ids ) {
+		$url = object_to_uri( $activity );
 
 		if ( empty( $url ) ) {
 			return;
@@ -85,13 +107,27 @@ class Announce {
 			return;
 		}
 
-		$state    = Interactions::add_reaction( $array );
-		$reaction = null;
-
-		if ( $state && ! is_wp_error( $state ) ) {
-			$reaction = get_comment( $state );
+		// If the object is a Create activity, extract the actual object from it.
+		if ( isset( $activity['object']['type'] ) && 'Create' === $activity['object']['type'] ) {
+			$activity['object'] = object_to_uri( $activity['object']['object'] );
 		}
 
-		do_action( 'activitypub_handled_announce', $array, $user_id, $state, $reaction );
+		$success = false;
+		$result  = Interactions::add_reaction( $activity );
+
+		if ( $result && ! is_wp_error( $result ) ) {
+			$success = true;
+			$result  = get_comment( $result );
+		}
+
+		/**
+		 * Fires after an ActivityPub Announce activity has been handled.
+		 *
+		 * @param array                            $activity The ActivityPub activity data.
+		 * @param int[]                            $user_ids The local user IDs.
+		 * @param bool                             $success  True on success, false otherwise.
+		 * @param array|string|int|\WP_Error|false $result   The WP_Comment object of the created announce/repost comment, or null if creation failed.
+		 */
+		\do_action( 'activitypub_handled_announce', $activity, (array) $user_ids, $success, $result );
 	}
 }

@@ -1,0 +1,266 @@
+import { store, getContext, getConfig } from '@wordpress/interactivity';
+import { withSyncEvent } from '../shared/with-sync-event';
+import { createModalStore } from '../shared/modal';
+import './style.scss';
+
+createModalStore( 'activitypub/remote-reply' );
+
+/**
+ * @typedef {Object} config
+ * @property {string} namespace                ActivityPub REST Namespace.
+ * @property {Object} i18n                     Internationalization strings.
+ * @property {string} i18n.copy                "Copy" button text.
+ * @property {string} i18n.copied              "Copied" button text.
+ * @property {string} i18n.emptyProfileError   Error message for empty remote profile.
+ * @property {string} i18n.invalidProfileError Error message for invalid remote profile.
+ * @property {string} i18n.genericError        Generic error message.
+ */
+
+/**
+ * @typedef {Object} context
+ * @property {string}  blockId           The block ID.
+ * @property {string}  commentId         The comment ID.
+ * @property {string}  commentURL        The comment URL.
+ * @property {string}  copyButtonText    The copy button text.
+ * @property {string}  errorMessage      The error message.
+ * @property {boolean} isError           Whether there is an error.
+ * @property {boolean} isLoading         Whether the remote profile is being submitted.
+ * @property {Object}  modal             The modal state.
+ * @property {boolean} modal.isOpen      Whether the modal is open.
+ * @property {string}  remoteProfile     The remote profile.
+ * @property {boolean} shouldSaveProfile Whether to save the profile.
+ */
+
+const { actions, callbacks, state } = store( 'activitypub/remote-reply', {
+	state: {
+		/**
+		 * Get the remote profile URL.
+		 *
+		 * @return {string} The remote profile URL.
+		 */
+		get remoteProfileUrl() {
+			const { commentURL } = getContext();
+
+			return state.template.replace( '{uri}', encodeURIComponent( commentURL ) );
+		},
+	},
+	actions: {
+		/**
+		 * Handle the opening of the modal.
+		 *
+		 * @param {Event}  event     The event that triggered the modal opening/closing.
+		 * @param {string} event.key The key pressed, if any.
+		 */
+		onReplyLinkKeydown: withSyncEvent( ( event ) => {
+			// Handle Enter key to open the modal.
+			if ( event.key === 'Enter' || event.key === ' ' ) {
+				event.preventDefault();
+				actions.toggleModal( event );
+			}
+		} ),
+
+		/**
+		 * Copy the comment URL to the clipboard.
+		 */
+		copyToClipboard() {
+			const context = getContext();
+			const { i18n } = getConfig();
+
+			// Use the Clipboard API to copy text.
+			navigator.clipboard.writeText( context.commentURL ).then(
+				() => {
+					// Update button text to show success.
+					context.copyButtonText = i18n.copied;
+
+					// Reset button text after 1 second.
+					setTimeout( () => {
+						context.copyButtonText = i18n.copy;
+					}, 1000 );
+				},
+				( error ) => {
+					// eslint-disable-next-line no-console -- Log error if copying fails.
+					console.error( 'Could not copy text: ', error );
+				}
+			);
+		},
+
+		/**
+		 * Update the remote profile value.
+		 *
+		 * @param {Event}  event              Input event.
+		 * @param {string} event.target.value The remote profile value.
+		 */
+		updateRemoteProfile( event ) {
+			const context = getContext();
+			context.remoteProfile = event.target.value;
+
+			// Reset error state when input changes.
+			context.isError = false;
+			context.errorMessage = '';
+		},
+
+		/**
+		 * Handle keydown event for remote profile input.
+		 *
+		 * @param {Event}  event     Keydown event.
+		 * @param {string} event.key Key pressed.
+		 */
+		onInputKeydown( event ) {
+			if ( event.key === 'Enter' ) {
+				event.preventDefault();
+
+				return actions.submitRemoteProfile();
+			}
+		},
+
+		/**
+		 * Submit the remote profile.
+		 */
+		*submitRemoteProfile() {
+			const context = getContext();
+			const { namespace, i18n } = getConfig();
+			const { apiFetch } = window.wp;
+			const profileURL = context.remoteProfile.trim();
+
+			// Validate input.
+			if ( ! profileURL ) {
+				context.isError = true;
+				context.errorMessage = i18n.emptyProfileError;
+				return;
+			}
+
+			if ( ! callbacks.isHandle( profileURL ) && ! callbacks.isUrl( profileURL ) ) {
+				context.isError = true;
+				context.errorMessage = i18n.invalidProfileError;
+				return;
+			}
+
+			// Set loading state.
+			context.isLoading = true;
+			context.isError = false;
+			context.errorMessage = '';
+
+			// Construct the API path.
+			const path = `/${ namespace }/comments/${ context.commentId }/remote-reply?resource=${ encodeURIComponent(
+				profileURL
+			) }`;
+
+			try {
+				// Make the API request.
+				const { template, url } = yield apiFetch( { path } );
+
+				// Set opening state.
+				context.isLoading = false;
+
+				// Open the remote reply URL in a new tab.
+				window.open( url, '_blank' );
+
+				// Close the modal after opening the URL.
+				actions.closeModal();
+
+				// Save the remote user if the remember option is checked.
+				if ( context.shouldSaveProfile ) {
+					callbacks.setStore( { profileURL, template } );
+					Object.assign( state, { hasRemoteUser: true, profileURL, template } );
+				}
+			} catch ( error ) {
+				// eslint-disable-next-line no-console -- Log error for debugging.
+				console.error( 'Error submitting profile:', error );
+				context.isLoading = false;
+				context.isError = true;
+				context.errorMessage = error.message || i18n.genericError;
+			}
+		},
+
+		/**
+		 * Toggle the remember profile checkbox.
+		 */
+		toggleRememberProfile() {
+			const context = getContext();
+			context.shouldSaveProfile = ! context.shouldSaveProfile;
+		},
+
+		/**
+		 * Delete the saved remote user profile.
+		 */
+		deleteRemoteUser() {
+			callbacks.deleteStore();
+			state.hasRemoteUser = false;
+			state.profileURL = '';
+			state.template = '';
+		},
+	},
+	callbacks: {
+		/**
+		 * The storage key for the remote user data.
+		 */
+		storageKey: 'fediverse-remote-user',
+
+		/**
+		 * Initialize the component.
+		 */
+		init() {
+			const { profileURL, template } = callbacks.getStore();
+
+			// Set the remote user data from localStorage if available.
+			if ( profileURL && template ) {
+				Object.assign( state, { hasRemoteUser: true, profileURL, template } );
+			}
+		},
+
+		/**
+		 * Retrieve the remote user data from localStorage.
+		 *
+		 * @return {Object} Remote user data or empty object, if not set.
+		 */
+		getStore() {
+			const data = localStorage.getItem( callbacks.storageKey );
+
+			return data ? JSON.parse( data ) : {};
+		},
+
+		/**
+		 * Store remote user data in localStorage.
+		 *
+		 * @param {Object} data Remote user data to store.
+		 */
+		setStore( data ) {
+			localStorage.setItem( callbacks.storageKey, JSON.stringify( data ) );
+		},
+
+		/**
+		 * Remove remote user data from localStorage.
+		 */
+		deleteStore() {
+			localStorage.removeItem( callbacks.storageKey );
+		},
+
+		/**
+		 * Best guess whether a string is a valid ActivityPub handle.
+		 *
+		 * @param {string} string String to check.
+		 * @return {boolean} True if string is a valid handle, false otherwise.
+		 */
+		isHandle( string ) {
+			// Check if the string starts with '@' and contains a valid URL.
+			const parts = string.replace( /^@/, '' ).split( '@' );
+
+			return parts.length === 2 && callbacks.isUrl( `https://${ parts[ 1 ] }` );
+		},
+
+		/**
+		 * Checks if a string is a valid URL.
+		 *
+		 * @param {string} string String to check.
+		 * @return {boolean} True if string is a valid URL, false otherwise.
+		 */
+		isUrl( string ) {
+			try {
+				new URL( string );
+				return true;
+			} catch ( _ ) {
+				return false;
+			}
+		},
+	},
+} );

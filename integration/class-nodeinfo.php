@@ -1,83 +1,145 @@
 <?php
+/**
+ * NodeInfo integration file.
+ *
+ * @package Activitypub
+ */
+
 namespace Activitypub\Integration;
 
-use function Activitypub\get_total_users;
+use Activitypub\Webfinger;
+
 use function Activitypub\get_active_users;
 use function Activitypub\get_rest_url_by_path;
+use function Activitypub\get_total_users;
 
 /**
- * Compatibility with the NodeInfo plugin
+ * Compatibility with the NodeInfo plugin.
  *
  * @see https://wordpress.org/plugins/nodeinfo/
  */
 class Nodeinfo {
 	/**
-	 * Initialize the class, registering WordPress hooks
+	 * Initialize the class, registering WordPress hooks.
 	 */
 	public static function init() {
 		\add_filter( 'nodeinfo_data', array( self::class, 'add_nodeinfo_data' ), 10, 2 );
-		\add_filter( 'nodeinfo2_data', array( self::class, 'add_nodeinfo2_data' ), 10 );
+		\add_filter( 'nodeinfo2_data', array( self::class, 'add_nodeinfo2_data' ) );
 
-		\add_filter( 'wellknown_nodeinfo_data', array( self::class, 'add_wellknown_nodeinfo_data' ), 10, 2 );
+		\add_filter( 'nodeinfo_discovery', array( self::class, 'add_wellknown_nodeinfo_data' ) );
 	}
 
 	/**
-	 * Extend NodeInfo data
+	 * Extend NodeInfo data.
 	 *
-	 * @param array  $nodeinfo NodeInfo data
-	 * @param string           The NodeInfo Version
+	 * @param array  $nodeinfo NodeInfo data.
+	 * @param string $version  The NodeInfo Version.
 	 *
-	 * @return array The extended array
+	 * @return array The extended array.
 	 */
 	public static function add_nodeinfo_data( $nodeinfo, $version ) {
-		if ( $version >= '2.0' ) {
-			$nodeinfo['protocols'][] = 'activitypub';
-		} else {
-			$nodeinfo['protocols']['inbound'][]  = 'activitypub';
-			$nodeinfo['protocols']['outbound'][] = 'activitypub';
+		$nodeinfo = wp_parse_args(
+			$nodeinfo,
+			array(
+				'version'   => $version,
+				'software'  => array(),
+				'usage'     => array(
+					'users' => array(
+						'total'          => 0,
+						'activeMonth'    => 0,
+						'activeHalfyear' => 0,
+					),
+				),
+				'protocols' => array(),
+				'services'  => array(
+					'inbound'  => array(),
+					'outbound' => array(),
+				),
+				'metadata'  => array(),
+			)
+		);
+
+		if ( \version_compare( $version, '2.1', '>=' ) ) {
+			$nodeinfo['software']['homepage']   = 'https://wordpress.org/plugins/activitypub/';
+			$nodeinfo['software']['repository'] = 'https://github.com/Automattic/wordpress-activitypub';
 		}
+
+		$nodeinfo['protocols'][] = 'activitypub';
+
+		$nodeinfo['services']['inbound']  = array_merge(
+			$nodeinfo['services']['inbound'],
+			array( 'gnusocial' )
+		);
+		$nodeinfo['services']['outbound'] = array_merge(
+			$nodeinfo['services']['outbound'],
+			array( 'friendica', 'gnusocial', 'mediagoblin', 'wordpress' )
+		);
 
 		$nodeinfo['usage']['users'] = array(
 			'total'          => get_total_users(),
-			'activeMonth'    => get_active_users( '1 month ago' ),
-			'activeHalfyear' => get_active_users( '6 month ago' ),
+			'activeMonth'    => get_active_users(),
+			'activeHalfyear' => get_active_users( 6 ),
 		);
+
+		$nodeinfo['metadata']['federation']    = array( 'enabled' => true );
+		$nodeinfo['metadata']['staffAccounts'] = self::get_staff();
 
 		return $nodeinfo;
 	}
 
 	/**
-	 * Extend NodeInfo2 data
+	 * Extend NodeInfo2 data.
 	 *
-	 * @param  array $nodeinfo NodeInfo2 data
+	 * @param  array $nodeinfo NodeInfo2 data.
 	 *
-	 * @return array The extended array
+	 * @return array The extended array.
 	 */
 	public static function add_nodeinfo2_data( $nodeinfo ) {
 		$nodeinfo['protocols'][] = 'activitypub';
 
 		$nodeinfo['usage']['users'] = array(
 			'total'          => get_total_users(),
-			'activeMonth'    => get_active_users( '1 month ago' ),
-			'activeHalfyear' => get_active_users( '6 month ago' ),
+			'activeMonth'    => get_active_users(),
+			'activeHalfyear' => get_active_users( 6 ),
 		);
 
 		return $nodeinfo;
 	}
 
 	/**
-	 * Extend the well-known nodeinfo data
+	 * Extend the well-known nodeinfo data.
 	 *
-	 * @param array $data The well-known nodeinfo data
+	 * @param array $data The well-known nodeinfo data.
 	 *
-	 * @return array The extended array
+	 * @return array The extended array.
 	 */
 	public static function add_wellknown_nodeinfo_data( $data ) {
 		$data['links'][] = array(
-			'rel' => 'https://www.w3.org/ns/activitystreams#Application',
+			'rel'  => 'https://www.w3.org/ns/activitystreams#Application',
 			'href' => get_rest_url_by_path( 'application' ),
 		);
 
 		return $data;
+	}
+
+	/**
+	 * Get all staff accounts (admin users with the "activitypub" capability) and return them in WebFinger resource format.
+	 *
+	 * @return array List of staff accounts in WebFinger resource format.
+	 */
+	private static function get_staff() {
+		// Get all admin users with the cap activitypub.
+		$admins = get_users(
+			array(
+				'role'    => 'administrator',
+				'orderby' => 'ID',
+				'order'   => 'ASC',
+				'cap'     => 'activitypub',
+				'fields'  => 'ID',
+			)
+		);
+		$admins = array_map( array( Webfinger::class, 'get_user_resource' ), $admins );
+
+		return array_values( array_filter( $admins ) );
 	}
 }

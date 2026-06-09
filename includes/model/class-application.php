@@ -1,56 +1,111 @@
 <?php
+/**
+ * Application model file.
+ *
+ * @package Activitypub
+ */
+
 namespace Activitypub\Model;
 
-use WP_Query;
-use Activitypub\Signature;
 use Activitypub\Activity\Actor;
-use Activitypub\Collection\Users;
+use Activitypub\Collection\Actors;
 
 use function Activitypub\get_rest_url_by_path;
+use function Activitypub\home_host;
 
+/**
+ * Application class.
+ *
+ * @method int get__id() Gets the internal user ID for the application (always returns APPLICATION_USER_ID).
+ */
 class Application extends Actor {
 	/**
 	 * The User-ID
 	 *
 	 * @var int
 	 */
-	protected $_id = Users::APPLICATION_USER_ID; // phpcs:ignore PSR2.Classes.PropertyDeclaration.Underscore
+	protected $_id = Actors::APPLICATION_USER_ID; // phpcs:ignore PSR2.Classes.PropertyDeclaration.Underscore
 
 	/**
-	 * If the User is discoverable.
+	 * Whether the Application is discoverable.
 	 *
 	 * @see https://docs.joinmastodon.org/spec/activitypub/#discoverable
 	 *
 	 * @context http://joinmastodon.org/ns#discoverable
 	 *
-	 * @var boolean
+	 * @var bool
 	 */
 	protected $discoverable = false;
 
 	/**
-	 * If the User is indexable.
+	 * Whether the Application is indexable.
 	 *
 	 * @context http://joinmastodon.org/ns#indexable
 	 *
-	 * @var boolean
+	 * @var bool
 	 */
 	protected $indexable = false;
 
 	/**
-	 * The WebFinger Resource.
+	 * Whether the Application manually approves followers.
 	 *
-	 * @var string<url>
+	 * @see https://docs.joinmastodon.org/spec/activitypub/#as
+	 *
+	 * @context as:manuallyApprovesFollowers
+	 *
+	 * @var bool
 	 */
-	protected $webfinger;
+	protected $manually_approves_followers = true;
 
-	public function get_type() {
-		return 'Application';
-	}
+	/**
+	 * List of software capabilities implemented by the Application.
+	 *
+	 * @see https://codeberg.org/silverpill/feps/src/branch/main/844e/fep-844e.md
+	 *
+	 * @var array
+	 */
+	protected $implements = array(
+		array(
+			'href' => 'https://datatracker.ietf.org/doc/html/rfc9421',
+			'name' => 'RFC-9421: HTTP Message Signatures',
+		),
+	);
 
-	public function get_manually_approves_followers() {
-		return true;
-	}
+	/**
+	 * Set Application as invisible.
+	 *
+	 * @see https://litepub.social/
+	 *
+	 * @var bool
+	 */
+	protected $invisible = true;
 
+	/**
+	 * The type of the Actor.
+	 *
+	 * @var string
+	 */
+	protected $type = 'Application';
+
+	/**
+	 * The Username.
+	 *
+	 * @var string
+	 */
+	protected $name = 'application';
+
+	/**
+	 * The preferred username.
+	 *
+	 * @var string
+	 */
+	protected $preferred_username = 'application';
+
+	/**
+	 * Returns the ID of the Application.
+	 *
+	 * @return string The ID of the Application.
+	 */
 	public function get_id() {
 		return get_rest_url_by_path( 'application' );
 	}
@@ -70,27 +125,19 @@ class Application extends Actor {
 	 * @return string The User-URL with @-Prefix for the username.
 	 */
 	public function get_alternate_url() {
-		return $this->get_url();
+		return $this->get_id();
 	}
 
-	public function get_name() {
-		return 'application';
-	}
-
-	public function get_preferred_username() {
-		return $this->get_name();
-	}
-
-		/**
+	/**
 	 * Get the User-Icon.
 	 *
-	 * @return array The User-Icon.
+	 * @return string[] The User-Icon.
 	 */
 	public function get_icon() {
-		// try site icon first
+		// Try site icon first.
 		$icon_id = get_option( 'site_icon' );
 
-		// try custom logo second
+		// Try custom logo second.
 		if ( ! $icon_id ) {
 			$icon_id = get_theme_mod( 'custom_logo' );
 		}
@@ -105,7 +152,7 @@ class Application extends Actor {
 		}
 
 		if ( ! $icon_url ) {
-			// fallback to default icon
+			// Fallback to default icon.
 			$icon_url = plugins_url( '/assets/img/wp-logo.png', ACTIVITYPUB_PLUGIN_FILE );
 		}
 
@@ -118,7 +165,7 @@ class Application extends Actor {
 	/**
 	 * Get the User-Header-Image.
 	 *
-	 * @return array|null The User-Header-Image.
+	 * @return string[]|null The User-Header-Image.
 	 */
 	public function get_header_image() {
 		if ( \has_header_image() ) {
@@ -131,8 +178,13 @@ class Application extends Actor {
 		return null;
 	}
 
+	/**
+	 * Get the first published date.
+	 *
+	 * @return string The published date.
+	 */
 	public function get_published() {
-		$first_post = new WP_Query(
+		$first_post = new \WP_Query(
 			array(
 				'orderby' => 'date',
 				'order'   => 'ASC',
@@ -146,7 +198,7 @@ class Application extends Actor {
 			$time = \time();
 		}
 
-		return \gmdate( 'Y-m-d\TH:i:s\Z', $time );
+		return \gmdate( ACTIVITYPUB_DATE_TIME_RFC3339, $time );
 	}
 
 	/**
@@ -176,28 +228,37 @@ class Application extends Actor {
 		return $this->get_preferred_username() . '@' . \wp_parse_url( \home_url(), \PHP_URL_HOST );
 	}
 
+	/**
+	 * Returns the public key.
+	 *
+	 * @return string[] The public key.
+	 */
 	public function get_public_key() {
 		return array(
-			'id'       => $this->get_id() . '#main-key',
-			'owner'    => $this->get_id(),
-			'publicKeyPem' => Signature::get_public_key_for( Users::APPLICATION_USER_ID ),
+			'id'           => $this->get_id() . '#main-key',
+			'owner'        => $this->get_id(),
+			'publicKeyPem' => Actors::get_public_key( Actors::APPLICATION_USER_ID ),
 		);
 	}
 
 	/**
-	 * Get the User-Description.
+	 * Get the User description.
 	 *
-	 * @return string The User-Description.
+	 * @return string The User description.
 	 */
 	public function get_summary() {
-		return \wpautop(
-			\wp_kses(
-				\get_bloginfo( 'description' ),
-				'default'
-			)
+		return sprintf(
+			/* translators: %s: Domain of the site */
+			__( 'This is the Application Actor for %s.', 'activitypub' ),
+			home_host()
 		);
 	}
 
+	/**
+	 * Returns the canonical URL of the object.
+	 *
+	 * @return string|null The canonical URL of the object.
+	 */
 	public function get_canonical_url() {
 		return \home_url();
 	}

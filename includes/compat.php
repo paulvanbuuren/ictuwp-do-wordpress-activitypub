@@ -1,6 +1,8 @@
 <?php
 /**
  * ActivityPub implementation for WordPress/PHP functions either missing from older WordPress/PHP versions or not included by default.
+ *
+ * @package Activitypub
  */
 
 if ( ! function_exists( 'str_starts_with' ) ) {
@@ -23,52 +25,53 @@ if ( ! function_exists( 'str_starts_with' ) ) {
 	}
 }
 
-if ( ! function_exists( 'get_self_link' ) ) {
+if ( ! function_exists( 'str_ends_with' ) ) {
 	/**
-	 * Returns the link for the currently displayed feed.
+	 * Polyfill for `str_ends_with()` function added in PHP 8.0.
 	 *
-	 * @return string Correct link for the atom:self element.
-	 */
-	function get_self_link() {
-		$host = wp_parse_url( home_url() );
-		$path = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
-		return esc_url( apply_filters( 'self_link', set_url_scheme( 'http://' . $host['host'] . $path ) ) );
-	}
-}
-
-if ( ! function_exists( 'is_countable' ) ) {
-	/**
-	 * Polyfill for `is_countable()` function added in PHP 7.3.
+	 * Performs a case-sensitive check indicating if
+	 * the haystack ends with needle.
 	 *
-	 * @param mixed $value The value to check.
-	 * @return bool True if `$value` is countable, otherwise false.
+	 * @param string $haystack The string to search in.
+	 * @param string $needle   The substring to search for in the `$haystack`.
+	 *
+	 * @return bool True if `$haystack` ends with `$needle`, otherwise false.
 	 */
-	function is_countable( $value ) {
-		return is_array( $value ) || $value instanceof \Countable;
+	function str_ends_with( $haystack, $needle ) {
+		return strlen( $needle ) === 0 || substr( $haystack, - strlen( $needle ) ) === $needle;
 	}
 }
 
 /**
- * Polyfill for `array_is_list()` function added in PHP 7.3.
+ * Polyfill for `array_is_list()` function added in PHP 8.1.
  *
  * @param array $array The array to check.
  *
  * @return bool True if `$array` is a list, otherwise false.
  */
 if ( ! function_exists( 'array_is_list' ) ) {
-	// phpcs:disable Universal.NamingConventions.NoReservedKeywordParameterNames.arrayFound
-	function array_is_list( $array ) {
-		if ( ! is_array( $array ) ) {
+	/**
+	 * Check if an array is a list.
+	 *
+	 * An array is considered a list if its keys are a range of numbers
+	 * starting from 0 and ending at count( $array ) - 1.
+	 *
+	 * @param array $input The array to check.
+	 *
+	 * @return bool True if `$input` is a list, otherwise false.
+	 */
+	function array_is_list( $input ) {
+		if ( ! is_array( $input ) ) {
 			return false;
 		}
 
-		if ( array_values( $array ) === $array ) {
+		if ( array_values( $input ) === $input ) {
 			return true;
 		}
 
 		$next_key = -1;
 
-		foreach ( $array as $k => $v ) {
+		foreach ( $input as $k => $v ) {
 			if ( ++$next_key !== $k ) {
 				return false;
 			}

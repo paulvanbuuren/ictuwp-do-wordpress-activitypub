@@ -1,204 +1,136 @@
 <?php
-namespace Activitypub;
-
-use WP_CLI;
-use WP_CLI_Command;
-use Activitypub\Scheduler;
-
-use function Activitypub\was_comment_received;
-
 /**
- * WP-CLI commands
+ * WP-CLI commands registration.
  *
  * @package Activitypub
  */
-class Cli extends WP_CLI_Command {
-	/**
-	 * Check the Plugins Meta-Informations
-	 *
-	 * ## OPTIONS
-	 *
-	 * [--Name]
-	 * The Plugin Name
-	 *
-	 * [--PluginURI]
-	 * The Plugin URI
-	 *
-	 * [--Version]
-	 * The Plugin Version
-	 *
-	 * [--Description]
-	 * The Plugin Description
-	 *
-	 * [--Author]
-	 * The Plugin Author
-	 *
-	 * [--AuthorURI]
-	 * The Plugin Author URI
-	 *
-	 * [--TextDomain]
-	 * The Plugin Text Domain
-	 *
-	 * [--DomainPath]
-	 * The Plugin Domain Path
-	 *
-	 * [--Network]
-	 * The Plugin Network
-	 *
-	 * [--RequiresWP]
-	 * The Plugin Requires at least
-	 *
-	 * [--RequiresPHP]
-	 * The Plugin Requires PHP
-	 *
-	 * [--UpdateURI]
-	 * The Plugin Update URI
-	 *
-	 * See: https://developer.wordpress.org/reference/functions/get_plugin_data/#return
-	 *
-	 * ## EXAMPLES
-	 *
-	 *     $ wp webmention meta
-	 *
-	 *     $ wp webmention meta --Version
-	 *     Version: 1.0.0
-	 *
-	 * @param array|null $args       The arguments.
-	 * @param array|null $assoc_args The associative arguments.
-	 *
-	 * @return void
-	 */
-	public function meta( $args, $assoc_args ) {
-		$plugin_data = get_plugin_meta();
 
-		if ( $assoc_args ) {
-			$plugin_data = array_intersect_key( $plugin_data, $assoc_args );
-		} else {
-			WP_CLI::line( __( "ActivityPub Plugin Meta:\n", 'activitypub' ) );
-		}
+namespace Activitypub;
 
-		foreach ( $plugin_data as $key => $value ) {
-			WP_CLI::line( $key . ':	' . $value );
-		}
-	}
+/**
+ * ActivityPub CLI command registry.
+ *
+ * Registers all ActivityPub CLI subcommands with WP-CLI.
+ *
+ * @package Activitypub
+ */
+class Cli {
 
 	/**
-	 * Remove the entire blog from the Fediverse.
+	 * Register all ActivityPub CLI commands.
 	 *
-	 * ## EXAMPLES
+	 * This method registers the main 'activitypub' command namespace and all its
+	 * subcommands for managing ActivityPub functionality via WP-CLI.
 	 *
-	 *     $ wp activitypub self-destruct
-	 *
-	 * @param array|null $args       The arguments.
-	 * @param array|null $assoc_args The associative arguments.
-	 *
-	 * @return void
+	 * Available commands:
+	 * - wp activitypub post <delete|update> <id>
+	 * - wp activitypub comment <delete|update> <id>
+	 * - wp activitypub actor <delete|update> <id>
+	 * - wp activitypub outbox <undo|reschedule> <id>
+	 * - wp activitypub cache <clear|status> [--type=<type>]
+	 * - wp activitypub self-destruct [--status] [--yes]
+	 * - wp activitypub move <from> <to>
+	 * - wp activitypub follow <remote_user>
+	 * - wp activitypub stats <collect|compile|send>
+	 * - wp activitypub fetch <url>
+	 * - wp activitypub blurhash backfill [--dry-run] [--limit=<n>] [--force]
 	 */
-	public function self_destruct( $args, $assoc_args ) { // phpcs:ignore VariableAnalysis.CodeAnalysis.VariableAnalysis.UnusedVariable
-		WP_CLI::warning( __( 'Self-Destructing is not implemented yet.', 'activitypub' ) );
-	}
+	public static function register() {
+		// Register parent command with version subcommand.
+		\WP_CLI::add_command(
+			'activitypub',
+			'\Activitypub\Cli\Command',
+			array(
+				'shortdesc' => 'Manage ActivityPub plugin functionality and federation.',
+			)
+		);
 
-	/**
-	 * Delete or Update a Post, Page, Custom Post Type or Attachment.
-	 *
-	 * ## OPTIONS
-	 *
-	 * <action>
-	 * : The action to perform. Either `delete` or `update`.
-	 * ---
-	 * options:
-	 *   - delete
-	 *   - update
-	 * ---
-	 *
-	 * <id>
-	 * : The id of the Post, Page, Custom Post Type or Attachment.
-	 *
-	 * ## EXAMPLES
-	 *
-	 *     $ wp activitypub post delete 1
-	 *
-	 * @synopsis <action> <id>
-	 *
-	 * @param array|null $args       The arguments.
-	 * @param array|null $assoc_args The associative arguments.
-	 *
-	 * @return void
-	 */
-	public function post( $args, $assoc_args ) { // phpcs:ignore VariableAnalysis.CodeAnalysis.VariableAnalysis.UnusedVariable
-		$post = get_post( $args[1] );
+		\WP_CLI::add_command(
+			'activitypub post',
+			'\Activitypub\Cli\Post_Command',
+			array(
+				'shortdesc' => 'Manage ActivityPub posts (delete or update).',
+			)
+		);
 
-		if ( ! $post ) {
-			WP_CLI::error( __( 'Post not found.', 'activitypub' ) );
-		}
+		\WP_CLI::add_command(
+			'activitypub comment',
+			'\Activitypub\Cli\Comment_Command',
+			array(
+				'shortdesc' => 'Manage ActivityPub comments (delete or update).',
+			)
+		);
 
-		switch ( $args[0] ) {
-			case 'delete':
-				// translators: %s is the ID of the post.
-				WP_CLI::confirm( sprintf( __( 'Do you really want to delete the (Custom) Post with the ID: %s', 'activitypub' ), $args[1] ) );
-				Scheduler::schedule_post_activity( 'trash', 'publish', $args[1] );
-				WP_CLI::success( __( '"Delete"-Activity is queued.', 'activitypub' ) );
-				break;
-			case 'update':
-				Scheduler::schedule_post_activity( 'publish', 'publish', $args[1] );
-				WP_CLI::success( __( '"Update"-Activity is queued.', 'activitypub' ) );
-				break;
-			default:
-				WP_CLI::error( __( 'Unknown action.', 'activitypub' ) );
-		}
-	}
+		\WP_CLI::add_command(
+			'activitypub actor',
+			'\Activitypub\Cli\Actor_Command',
+			array(
+				'shortdesc' => 'Manage ActivityPub actors (delete or update).',
+			)
+		);
 
-	/**
-	 * Delete or Update a Comment.
-	 *
-	 * ## OPTIONS
-	 *
-	 * <action>
-	 * : The action to perform. Either `delete` or `update`.
-	 * ---
-	 * options:
-	 *   - delete
-	 *   - update
-	 * ---
-	 *
-	 * <id>
-	 * : The id of the Comment.
-	 *
-	 * ## EXAMPLES
-	 *
-	 *     $ wp activitypub comment delete 1
-	 *
-	 * @synopsis <action> <id>
-	 *
-	 * @param array|null $args       The arguments.
-	 * @param array|null $assoc_args The associative arguments.
-	 *
-	 * @return void
-	 */
-	public function comment( $args, $assoc_args ) { // phpcs:ignore VariableAnalysis.CodeAnalysis.VariableAnalysis.UnusedVariable
-		$comment = get_comment( $args[1] );
+		\WP_CLI::add_command(
+			'activitypub outbox',
+			'\Activitypub\Cli\Outbox_Command',
+			array(
+				'shortdesc' => 'Manage ActivityPub outbox items (undo or reschedule).',
+			)
+		);
 
-		if ( ! $comment ) {
-			WP_CLI::error( __( 'Comment not found.', 'activitypub' ) );
-		}
+		\WP_CLI::add_command(
+			'activitypub self-destruct',
+			'\Activitypub\Cli\Self_Destruct_Command',
+			array(
+				'shortdesc' => 'Remove the entire blog from the Fediverse.',
+			)
+		);
 
-		if ( was_comment_received( $comment ) ) {
-			WP_CLI::error( __( 'This comment was received via ActivityPub and cannot be deleted or updated.', 'activitypub' ) );
-		}
+		\WP_CLI::add_command(
+			'activitypub move',
+			'\Activitypub\Cli\Move_Command',
+			array(
+				'shortdesc' => 'Move the blog to a new URL.',
+			)
+		);
 
-		switch ( $args[0] ) {
-			case 'delete':
-				// translators: %s is the ID of the comment.
-				WP_CLI::confirm( sprintf( __( 'Do you really want to delete the Comment with the ID: %s', 'activitypub' ), $args[1] ) );
-				Scheduler::schedule_comment_activity( 'trash', 'approved', $args[1] );
-				WP_CLI::success( __( '"Delete"-Activity is queued.', 'activitypub' ) );
-				break;
-			case 'update':
-				Scheduler::schedule_comment_activity( 'approved', 'approved', $args[1] );
-				WP_CLI::success( __( '"Update"-Activity is queued.', 'activitypub' ) );
-				break;
-			default:
-				WP_CLI::error( __( 'Unknown action.', 'activitypub' ) );
-		}
+		\WP_CLI::add_command(
+			'activitypub follow',
+			'\Activitypub\Cli\Follow_Command',
+			array(
+				'shortdesc' => 'Follow a remote ActivityPub user.',
+			)
+		);
+
+		\WP_CLI::add_command(
+			'activitypub cache',
+			'\Activitypub\Cli\Cache_Command',
+			array(
+				'shortdesc' => 'Manage remote media cache (clear or show status).',
+			)
+		);
+
+		\WP_CLI::add_command(
+			'activitypub fetch',
+			'\Activitypub\Cli\Fetch_Command',
+			array(
+				'shortdesc' => 'Fetch a remote URL with a signed ActivityPub request.',
+			)
+		);
+
+		\WP_CLI::add_command(
+			'activitypub stats',
+			'\Activitypub\Cli\Stats_Command',
+			array(
+				'shortdesc' => 'Manage ActivityPub statistics (collect, compile or send).',
+			)
+		);
+
+		\WP_CLI::add_command(
+			'activitypub blurhash',
+			'\Activitypub\Cli\Blurhash_Command',
+			array(
+				'shortdesc' => 'Backfill Blurhash placeholders for image attachments.',
+			)
+		);
 	}
 }

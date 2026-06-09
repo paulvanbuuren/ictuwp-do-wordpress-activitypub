@@ -1,0 +1,256 @@
+@use "../shared/modal/style";
+
+.wp-block-activitypub-reactions {
+	box-sizing: border-box;
+	margin-top: 2rem;
+	margin-right: auto;
+	margin-bottom: 2rem;
+	margin-left: auto;
+	max-width: var(--wp--style--global--content-size);
+	position: relative;
+
+	&.alignwide {
+		max-width: var(--wp--style--global--wide-size);
+	}
+
+	&.alignfull {
+		max-width: none;
+	}
+
+	&.has-background,
+	&.has-border {
+		padding: 2rem;
+	}
+
+	// Main container for reactions.
+	.activitypub-reactions {
+		display: flex;
+		flex-direction: column;
+		flex-wrap: wrap;
+	}
+
+	// Reaction group for each type (likes, reposts).
+	.reaction-group {
+		display: flex;
+		align-items: center;
+		margin: 0.5em 0;
+		position: relative;
+		width: 100%;
+		gap: 0.75rem;
+		justify-content: flex-start;
+
+		// Container for avatar images.
+		.reaction-avatars {
+			display: flex;
+			flex-direction: row;
+			align-items: center;
+			list-style: none;
+			margin: 0 !important;
+			padding: 0;
+
+			li {
+				padding: 0;
+				margin: 0 -10px 0 0;
+				transition: transform 0.2s ease;
+
+				// Remove margin on avatar that doesn't have a hidden sibling.
+				&:not([hidden]):not(:has(~ li:not([hidden]))) {
+					margin-right: 0;
+				}
+
+				/* stylelint-disable-next-line no-descending-specificity */
+				&:hover {
+					z-index: 2;
+					transform: translateY(-2px);
+				}
+
+				a {
+					box-shadow: none;
+					border-radius: 50%;
+					display: block;
+					line-height: 1;
+					text-decoration: none;
+				}
+			}
+		}
+
+		.reaction-avatar {
+			max-width: 32px;
+			max-height: 32px;
+			overflow: hidden;
+			-moz-force-broken-image-icon: 1;
+			border-radius: 50%;
+			border: 0.5px solid var(--wp--preset--color--contrast, rgba(255, 255, 255, 0.8));
+			box-shadow:
+				0 0 0 0.5px rgba(255, 255, 255, 0.8),
+				0 1px 3px rgba(0, 0, 0, 0.2); // Soft drop shadow
+			transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+			will-change: transform;
+
+			&:hover,
+			&:focus-visible {
+				z-index: 1;
+				position: relative;
+				transform: translateY(-5px);
+			}
+		}
+
+		// Label showing count of reactions — styled as a plain link.
+		.reaction-label {
+			background: none;
+			border: none;
+			font: inherit;
+			display: flex;
+			align-items: center;
+			gap: 0.25rem;
+			flex: 0 0 auto;
+			padding: 0.25rem 0;
+			font-size: var(--wp--preset--font-size--small, 0.875rem);
+			color: currentcolor;
+			white-space: nowrap;
+			text-decoration: none;
+			cursor: pointer;
+
+			&:hover {
+				text-decoration: underline;
+				color: currentcolor;
+			}
+
+			&:focus {
+				box-shadow: none;
+				outline: none;
+			}
+
+			&:focus-visible {
+				outline: 1px solid currentcolor;
+				outline-offset: 2px;
+			}
+		}
+	}
+
+	// Horizontal row of action buttons for reaction types without items.
+	.reaction-actions-only {
+		display: flex;
+		flex-direction: row;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+		margin: 0.5em 0;
+	}
+
+	// Inline action button within each reaction group.
+	// All buttons share the same min-width so they align across rows.
+	.reaction-action-button {
+		background: none;
+		border: 1px solid currentcolor;
+		border-radius: 4px;
+		flex: 0 0 auto;
+		min-width: 5.5em;
+		padding: 0.25rem 0.75rem;
+		font-size: var(--wp--preset--font-size--small, 0.875rem);
+		color: currentcolor;
+		cursor: pointer;
+		text-align: center;
+		transition: background-color 0.2s ease;
+		white-space: nowrap;
+		text-decoration: none;
+
+		&:hover {
+			background-color: rgba(0, 0, 0, 0.05);
+			color: currentcolor;
+		}
+
+		&:focus:not(:disabled) {
+			box-shadow: none;
+			outline: 1px solid currentcolor;
+			outline-offset: 2px;
+		}
+	}
+
+	// Compact modal width is set in view-style.scss (frontend only via viewStyle).
+}
+
+/* Reactions list styles */
+.reactions-list {
+	list-style: none;
+	margin: 0 !important;
+	padding: 0.5rem;
+
+	.components-popover__content > & {
+		padding: 0;
+	}
+
+	.reaction-item {
+		margin: 0 0 0.5rem 0;
+
+		&:last-child {
+			margin-bottom: 0;
+		}
+
+		// Different context than .reaction-avatars li a
+		/* stylelint-disable no-descending-specificity */
+		a {
+			box-shadow: none;
+			display: flex;
+			align-items: center;
+			gap: 0.75rem;
+			text-decoration: none;
+			color: inherit;
+			transition: background-color 0.2s ease;
+			padding: 0.5rem;
+			border-radius: 4px;
+
+			&:hover {
+				background-color: rgba(0, 0, 0, 0.03);
+			}
+		}
+		/* stylelint-enable no-descending-specificity */
+
+		img {
+			box-shadow: none;
+			width: 36px;
+			height: 36px;
+			border-radius: 50%;
+			border: 1px solid var(--wp--preset--color--light-gray, #f0f0f0);
+		}
+
+		.reaction-name {
+			font-size: var(--wp--preset--font-size--small, 0.875rem);
+		}
+	}
+}
+
+.activitypub-popover .components-popover__content {
+	width: auto;
+	max-width: min-content;
+	min-width: 250px;
+	max-height: 300px;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+	padding: 0.5rem;
+}
+
+/* Compact display style - inline buttons without avatars */
+.wp-block-activitypub-reactions.is-style-compact {
+
+	.wp-block-heading {
+		margin-bottom: 0.5em;
+	}
+
+	.activitypub-reactions {
+		flex-direction: row;
+		flex-wrap: wrap;
+		gap: 0.5em;
+		display: inline-flex;
+	}
+
+	/* stylelint-disable-next-line no-descending-specificity */
+	.reaction-group {
+		width: auto;
+		margin: 0;
+		display: inline-flex;
+	}
+
+	.reaction-actions-only {
+		display: inline-flex;
+		margin: 0;
+	}
+}

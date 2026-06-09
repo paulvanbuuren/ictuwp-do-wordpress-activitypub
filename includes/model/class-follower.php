@@ -1,13 +1,20 @@
 <?php
+/**
+ * Follower class file.
+ *
+ * @package Activitypub
+ */
+
 namespace Activitypub\Model;
 
-use WP_Error;
-use WP_Query;
 use Activitypub\Activity\Actor;
 use Activitypub\Collection\Followers;
+use Activitypub\Collection\Remote_Actors;
+
+use function Activitypub\extract_name_from_uri;
 
 /**
- * ActivityPub Follower Class
+ * ActivityPub Follower Class.
  *
  * This Object represents a single Follower.
  * There is no direct reference to a WordPress User here.
@@ -15,15 +22,37 @@ use Activitypub\Collection\Followers;
  * @author Matt Wiebe
  * @author Matthias Pfefferle
  *
+ * @deprecated 7.0.0
  * @see https://www.w3.org/TR/activitypub/#follow-activity-inbox
+ *
+ * @method int           get__id()       Gets the post ID of the follower record.
+ * @method string[]|null get_image()     Gets the follower's profile image data.
+ * @method string|null   get_inbox()     Gets the follower's ActivityPub inbox URL.
+ * @method string[]|null get_endpoints() Gets the follower's ActivityPub endpoints.
+ *
+ * @method Follower set__id( int $id )                Sets the post ID of the follower record.
+ * @method Follower set_id( string $guid )            Sets the follower's GUID.
+ * @method Follower set_name( string $name )          Sets the follower's display name.
+ * @method Follower set_summary( string $summary )    Sets the follower's bio/summary.
+ * @method Follower set_published( string $datetime ) Sets the follower's published datetime in ISO 8601 format.
+ * @method Follower set_updated( string $datetime )   Sets the follower's last updated datetime in ISO 8601 format.
  */
 class Follower extends Actor {
 	/**
-	 * The complete Remote-Profile of the Follower
+	 * The complete Remote-Profile of the Follower.
 	 *
-	 * @var array
+	 * @var int
 	 */
 	protected $_id; // phpcs:ignore PSR2.Classes.PropertyDeclaration.Underscore
+
+	/**
+	 * Constructor.
+	 *
+	 * @deprecated Use Actor instead.
+	 */
+	public function __construct() {
+		\_deprecated_class( __CLASS__, '7.0.0', Actor::class );
+	}
 
 	/**
 	 * Get the errors.
@@ -31,13 +60,22 @@ class Follower extends Actor {
 	 * @return mixed
 	 */
 	public function get_errors() {
-		return get_post_meta( $this->_id, 'activitypub_errors' );
+		return Remote_Actors::get_errors( $this->_id );
+	}
+
+	/**
+	 * Clear the errors for the current Follower.
+	 *
+	 * @return bool True on success, false on failure.
+	 */
+	public function clear_errors() {
+		return Remote_Actors::clear_errors( $this->_id );
 	}
 
 	/**
 	 * Get the Summary.
 	 *
-	 * @return int The Summary.
+	 * @return string The Summary.
 	 */
 	public function get_summary() {
 		if ( isset( $this->summary ) ) {
@@ -51,7 +89,7 @@ class Follower extends Actor {
 	 * Getter for URL attribute.
 	 *
 	 * Falls back to ID, if no URL is set. This is relevant for
-	 * Plattforms like Lemmy, where the ID is the URL.
+	 * Platforms like Lemmy, where the ID is the URL.
 	 *
 	 * @return string The URL.
 	 */
@@ -66,10 +104,10 @@ class Follower extends Actor {
 	/**
 	 * Reset (delete) all errors.
 	 *
-	 * @return void
+	 * @return bool True on success, false on failure.
 	 */
 	public function reset_errors() {
-		delete_post_meta( $this->_id, 'activitypub_errors' );
+		return Remote_Actors::clear_errors( $this->_id );
 	}
 
 	/**
@@ -78,13 +116,7 @@ class Follower extends Actor {
 	 * @return int The number of errors.
 	 */
 	public function count_errors() {
-		$errors = $this->get_errors();
-
-		if ( is_array( $errors ) && ! empty( $errors ) ) {
-			return count( $errors );
-		}
-
-		return 0;
+		return Remote_Actors::count_errors( $this->_id );
 	}
 
 	/**
@@ -95,29 +127,27 @@ class Follower extends Actor {
 	public function get_latest_error_message() {
 		$errors = $this->get_errors();
 
-		if ( is_array( $errors ) && ! empty( $errors ) ) {
-			return reset( $errors );
+		if ( \is_array( $errors ) && ! empty( $errors ) ) {
+			return \reset( $errors );
 		}
 
 		return '';
 	}
 
 	/**
-	 * Update the current Follower-Object.
-	 *
-	 * @return void
+	 * Update the current Follower object.
 	 */
 	public function update() {
 		$this->save();
 	}
 
 	/**
-	 * Validate the current Follower-Object.
+	 * Validate the current Follower object.
 	 *
 	 * @return boolean True if the verification was successful.
 	 */
 	public function is_valid() {
-		// the minimum required attributes
+		// The minimum required attributes.
 		$required_attributes = array(
 			'id',
 			'preferredUsername',
@@ -136,94 +166,44 @@ class Follower extends Actor {
 	}
 
 	/**
-	 * Save the current Follower-Object.
+	 * Save the current Follower object.
 	 *
-	 * @return int|WP_Error The Post-ID or an WP_Error.
+	 * @return int|\WP_Error The post ID or an WP_Error.
 	 */
 	public function save() {
 		if ( ! $this->is_valid() ) {
-			return new WP_Error( 'activitypub_invalid_follower', __( 'Invalid Follower', 'activitypub' ), array( 'status' => 400 ) );
+			return new \WP_Error( 'activitypub_invalid_follower', __( 'Invalid Follower', 'activitypub' ), array( 'status' => 400 ) );
 		}
 
-		if ( ! $this->get__id() ) {
-			global $wpdb;
-
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-			$post_id = $wpdb->get_var(
-				$wpdb->prepare(
-					"SELECT ID FROM $wpdb->posts WHERE guid=%s",
-					esc_sql( $this->get_id() )
-				)
-			);
-
-			if ( $post_id ) {
-				$post = get_post( $post_id );
-				$this->set__id( $post->ID );
-			}
+		$id = Remote_Actors::upsert( $this );
+		if ( \is_wp_error( $id ) ) {
+			return $id;
 		}
 
-		$post_id = $this->get__id();
-
-		$args = array(
-			'ID'           => $post_id,
-			'guid'         => esc_url_raw( $this->get_id() ),
-			'post_title'   => wp_strip_all_tags( sanitize_text_field( $this->get_name() ) ),
-			'post_author'  => 0,
-			'post_type'    => Followers::POST_TYPE,
-			'post_name'    => esc_url_raw( $this->get_id() ),
-			'post_excerpt' => sanitize_text_field( wp_kses( $this->get_summary(), 'user_description' ) ),
-			'post_status'  => 'publish',
-			'meta_input'   => $this->get_post_meta_input(),
-		);
-
-		if ( ! empty( $post_id ) ) {
-			// If this is an update, prevent the "followed" date from being
-			// overwritten by the current date.
-			$post                  = get_post( $post_id );
-			$args['post_date']     = $post->post_date;
-			$args['post_date_gmt'] = $post->post_date_gmt;
-		}
-
-		$post_id = wp_insert_post( $args );
-		$this->_id = $post_id;
-
-		return $post_id;
+		$this->set__id( $id );
+		return $id;
 	}
 
 	/**
-	 * Upsert the current Follower-Object.
+	 * Upsert the current Follower object.
 	 *
-	 * @return int|WP_Error The Post-ID or an WP_Error.
+	 * @return int|\WP_Error The post ID or an WP_Error.
 	 */
 	public function upsert() {
 		return $this->save();
 	}
 
 	/**
-	 * Delete the current Follower-Object.
+	 * Delete the current Follower object.
 	 *
 	 * Beware that this os deleting a Follower for ALL users!!!
 	 *
 	 * To delete only the User connection (unfollow)
-	 * @see \Activitypub\Rest\Followers::remove_follower()
 	 *
-	 * @return void
+	 * @see \Activitypub\Rest\Followers::remove_follower()
 	 */
 	public function delete() {
-		wp_delete_post( $this->_id );
-	}
-
-	/**
-	 * Update the post meta.
-	 *
-	 * @return void
-	 */
-	protected function get_post_meta_input() {
-		$meta_input = array();
-		$meta_input['activitypub_inbox'] = $this->get_shared_inbox();
-		$meta_input['activitypub_actor_json'] = $this->to_json();
-
-		return $meta_input;
+		Followers::remove_follower( $this->_id, $this->get_id() );
 	}
 
 	/**
@@ -231,7 +211,7 @@ class Follower extends Actor {
 	 *
 	 * Sets a fallback to better handle API and HTML outputs.
 	 *
-	 * @return array The icon.
+	 * @return string[] The icon.
 	 */
 	public function get_icon() {
 		if ( isset( $this->icon['url'] ) ) {
@@ -239,9 +219,9 @@ class Follower extends Actor {
 		}
 
 		return array(
-			'type' => 'Image',
+			'type'      => 'Image',
 			'mediaType' => 'image/jpeg',
-			'url'  => ACTIVITYPUB_PLUGIN_URL . 'assets/img/mp.jpg',
+			'url'       => ACTIVITYPUB_PLUGIN_URL . 'assets/img/mp.jpg',
 		);
 	}
 
@@ -278,7 +258,7 @@ class Follower extends Actor {
 	}
 
 	/**
-	 * Get the Icon URL (Avatar)
+	 * Get the Icon URL (Avatar).
 	 *
 	 * @return string The URL to the Avatar.
 	 */
@@ -289,7 +269,7 @@ class Follower extends Actor {
 			return '';
 		}
 
-		if ( is_array( $icon ) ) {
+		if ( \is_array( $icon ) ) {
 			return $icon['url'];
 		}
 
@@ -297,7 +277,7 @@ class Follower extends Actor {
 	}
 
 	/**
-	 * Get the Icon URL (Avatar)
+	 * Get the Icon URL (Avatar).
 	 *
 	 * @return string The URL to the Avatar.
 	 */
@@ -308,7 +288,7 @@ class Follower extends Actor {
 			return '';
 		}
 
-		if ( is_array( $image ) ) {
+		if ( \is_array( $image ) ) {
 			return $image['url'];
 		}
 
@@ -333,13 +313,23 @@ class Follower extends Actor {
 	/**
 	 * Convert a Custom-Post-Type input to an Activitypub\Model\Follower.
 	 *
-	 * @return string The JSON string.
-	 *
-	 * @return array Activitypub\Model\Follower
+	 * @param \WP_Post $post The post object.
+	 * @return Follower|false The Follower object or false on failure.
 	 */
 	public static function init_from_cpt( $post ) {
-		$actor_json = get_post_meta( $post->ID, 'activitypub_actor_json', true );
-		$object = self::init_from_json( $actor_json );
+		if ( empty( $post->post_content ) ) {
+			$json = \get_post_meta( $post->ID, '_activitypub_actor_json', true );
+		} else {
+			$json = $post->post_content;
+		}
+
+		/* @var Follower $object Follower object. */
+		$object = self::init_from_json( $json );
+
+		if ( \is_wp_error( $object ) ) {
+			return false;
+		}
+
 		$object->set__id( $post->ID );
 		$object->set_id( $post->guid );
 		$object->set_name( $post->post_title );
@@ -359,37 +349,11 @@ class Follower extends Actor {
 	protected function extract_name_from_uri() {
 		// prefer the URL, but fall back to the ID.
 		if ( $this->url ) {
-			$name = $this->url;
+			$uri = $this->url;
 		} else {
-			$name = $this->id;
+			$uri = $this->id;
 		}
 
-		if ( \filter_var( $name, FILTER_VALIDATE_URL ) ) {
-			$name = \rtrim( $name, '/' );
-			$path = \wp_parse_url( $name, PHP_URL_PATH );
-
-			if ( $path ) {
-				if ( \strpos( $name, '@' ) !== false ) {
-					// expected: https://example.com/@user (default URL pattern)
-					$name = \preg_replace( '|^/@?|', '', $path );
-				} else {
-					// expected: https://example.com/users/user (default ID pattern)
-					$parts = \explode( '/', $path );
-					$name  = \array_pop( $parts );
-				}
-			}
-		} elseif (
-			\is_email( $name ) ||
-			\strpos( $name, 'acct' ) === 0 ||
-			\strpos( $name, '@' ) === 0
-		) {
-			// expected: user@example.com or acct:user@example (WebFinger)
-			$name  = \ltrim( $name, '@' );
-			$name  = \ltrim( $name, 'acct:' );
-			$parts = \explode( '@', $name );
-			$name  = $parts[0];
-		}
-
-		return $name;
+		return extract_name_from_uri( $uri );
 	}
 }

@@ -1,12 +1,8 @@
-import './style.scss';
-import { Followers } from './followers';
-import { createRoot } from '@wordpress/element';
-import domReady from '@wordpress/dom-ready';
+/**
+ * Followers block Interactivity API store.
+ *
+ * @see ../shared/actor-list/store.js for the shared implementation.
+ */
+import { createActorListStore } from '../shared/actor-list/store';
 
-domReady( () => {
-	// iterate over a nodelist
-	[].forEach.call( document.querySelectorAll( '.activitypub-follower-block' ), ( element ) => {
-		const attrs = JSON.parse( element.dataset.attrs );
-		createRoot( element ).render( <Followers { ...attrs } /> );
-	} );
-} );
+createActorListStore( 'activitypub/followers' );

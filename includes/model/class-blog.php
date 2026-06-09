@@ -1,112 +1,117 @@
 <?php
+/**
+ * Blog model file.
+ *
+ * @package Activitypub
+ */
+
 namespace Activitypub\Model;
 
-use WP_Query;
-use WP_Error;
-
-use Activitypub\Signature;
 use Activitypub\Activity\Actor;
-use Activitypub\Collection\Users;
+use Activitypub\Collection\Actors;
 use Activitypub\Collection\Extra_Fields;
 
 use function Activitypub\esc_hashtag;
-use function Activitypub\is_single_user;
-use function Activitypub\is_blog_public;
-use function Activitypub\is_user_disabled;
+use function Activitypub\get_attribution_domains;
 use function Activitypub\get_rest_url_by_path;
+use function Activitypub\is_blog_public;
+use function Activitypub\is_single_user;
 
+/**
+ * Blog class.
+ *
+ * @method int get__id() Gets the internal user ID for the blog (always returns BLOG_USER_ID).
+ */
 class Blog extends Actor {
-	/**
-	 * The Featured-Posts.
-	 *
-	 * @see https://docs.joinmastodon.org/spec/activitypub/#featured
-	 *
-	 * @context {
-	 *   "@id": "http://joinmastodon.org/ns#featured",
-	 *   "@type": "@id"
-	 * }
-	 *
-	 * @var string
-	 */
-	protected $featured;
-
-	/**
-	 * Moderators endpoint.
-	 *
-	 * @see https://join-lemmy.org/docs/contributors/05-federation.html
-	 *
-	 * @var string
-	 */
-	protected $moderators;
-
 	/**
 	 * The User-ID
 	 *
 	 * @var int
 	 */
-	protected $_id = Users::BLOG_USER_ID; // phpcs:ignore PSR2.Classes.PropertyDeclaration.Underscore
+	protected $_id = Actors::BLOG_USER_ID; // phpcs:ignore PSR2.Classes.PropertyDeclaration.Underscore
 
 	/**
-	 * If the User is indexable.
+	 * The generator of the object.
 	 *
-	 * @context http://joinmastodon.org/ns#indexable
+	 * @see https://www.w3.org/TR/activitypub/#generator
+	 * @see https://codeberg.org/fediverse/fep/src/branch/main/fep/844e/fep-844e.md#discovery-through-an-actor
 	 *
-	 * @var boolean
+	 * @var array
 	 */
-	protected $indexable;
+	protected $generator = array(
+		'type'       => 'Application',
+		'implements' => array(
+			array(
+				'href' => 'https://datatracker.ietf.org/doc/html/rfc9421',
+				'name' => 'RFC-9421: HTTP Message Signatures',
+			),
+		),
+	);
 
 	/**
-	 * The WebFinger Resource.
-	 *
-	 * @var string<url>
+	 * Constructor.
 	 */
-	protected $webfinger;
+	public function __construct() {
+		/**
+		 * Fires when a model actor is constructed.
+		 *
+		 * @param Blog $this The Blog model.
+		 */
+		\do_action( 'activitypub_construct_model_actor', $this );
+	}
 
 	/**
-	 * If the User is discoverable.
+	 * Whether the User manually approves followers.
 	 *
-	 * @see https://docs.joinmastodon.org/spec/activitypub/#discoverable
-	 *
-	 * @context http://joinmastodon.org/ns#discoverable
-	 *
-	 * @var boolean
+	 * @return false
 	 */
-	protected $discoverable;
-
-	/**
-	 * Restrict posting to mods
-	 *
-	 * @see https://join-lemmy.org/docs/contributors/05-federation.html
-	 *
-	 * @var boolean
-	 */
-	protected $posting_restricted_to_mods;
-
 	public function get_manually_approves_followers() {
 		return false;
 	}
 
+	/**
+	 * Whether the User is discoverable.
+	 *
+	 * @return boolean
+	 */
 	public function get_discoverable() {
 		return true;
 	}
 
 	/**
-	 * Get the User-ID.
+	 * Get the User ID.
 	 *
-	 * @return string The User-ID.
+	 * @return string The User ID.
 	 */
 	public function get_id() {
-		return $this->get_url();
+		$id = parent::get_id();
+
+		if ( $id ) {
+			return $id;
+		}
+
+		$permalink = \get_option( 'activitypub_use_permalink_as_id_for_blog', false );
+
+		if ( $permalink ) {
+			return \esc_url( \home_url( '/@' . $this->get_preferred_username() ) );
+		}
+
+		return \add_query_arg( 'author', $this->_id, \home_url( '/' ) );
 	}
 
 	/**
 	 * Get the type of the object.
 	 *
-	 * If the Blog is in "single user" mode, return "Person" insted of "Group".
+	 * If relay mode is enabled, return "Service".
+	 * If the Blog is in "single user" mode, return "Person" instead of "Group".
 	 *
 	 * @return string The type of the object.
 	 */
 	public function get_type() {
+		if ( \get_option( 'activitypub_relay_mode', false ) ) {
+			return 'Service';
+		}
+
 		if ( is_single_user() ) {
 			return 'Person';
 		} else {
@@ -115,9 +120,9 @@ class Blog extends Actor {
 	}
 
 	/**
-	 * Get the User-Name.
+	 * Get the Username.
 	 *
-	 * @return string The User-Name.
+	 * @return string The Username.
 	 */
 	public function get_name() {
 		$activitypub_blog_name = \get_option( 'activitypub_blog_name', null );
@@ -137,9 +142,9 @@ class Blog extends Actor {
 	}
 
 	/**
-	 * Get the User-Description.
+	 * Get the User description.
 	 *
-	 * @return string The User-Description.
+	 * @return string The User description.
 	 */
 	public function get_summary() {
 		$summary = \get_option( 'activitypub_blog_description', null );
@@ -157,12 +162,12 @@ class Blog extends Actor {
 	}
 
 	/**
-	 * Get the User-Url.
+	 * Get the User url.
 	 *
-	 * @return string The User-Url.
+	 * @return string The User url.
 	 */
 	public function get_url() {
-		return \esc_url( \trailingslashit( get_home_url() ) . '@' . $this->get_preferred_username() );
+		return \get_bloginfo( 'url' );
 	}
 
 	/**
@@ -180,22 +185,26 @@ class Blog extends Actor {
 	 * @return string The auto-generated Username.
 	 */
 	public static function get_default_username() {
-		// check if domain host has a subdomain
+		// Check if domain host has a subdomain.
 		$host = \wp_parse_url( \get_home_url(), \PHP_URL_HOST );
 		$host = \preg_replace( '/^www\./i', '', $host );
 
 		/**
-		 * Filter the default blog username.
+		 * Filters the default blog username.
 		 *
-		 * @param string $host The default username.
+		 * This filter allows developers to modify the default username that is
+		 * generated for the blog, which by default is the site's host name
+		 * without the 'www.' prefix.
+		 *
+		 * @param string $host The default username (site's host name).
 		 */
 		return apply_filters( 'activitypub_default_blog_username', $host );
 	}
 
 	/**
-	 * Get the preferred User-Name.
+	 * Get the preferred Username.
 	 *
-	 * @return string The User-Name.
+	 * @return string The Username.
 	 */
 	public function get_preferred_username() {
 		$username = \get_option( 'activitypub_blog_identifier' );
@@ -208,15 +217,15 @@ class Blog extends Actor {
 	}
 
 	/**
-	 * Get the User-Icon.
+	 * Get the User icon.
 	 *
-	 * @return array The User-Icon.
+	 * @return string[] The User icon.
 	 */
 	public function get_icon() {
-		// try site_logo, falling back to site_icon, first
-		$icon_id = get_option( 'site_logo', get_option( 'site_icon' ) );
+		// Try site_logo, falling back to site_icon, first.
+		$icon_id = get_option( 'site_icon' );
 
-		// try custom logo second
+		// Try custom logo second.
 		if ( ! $icon_id ) {
 			$icon_id = get_theme_mod( 'custom_logo' );
 		}
@@ -231,7 +240,7 @@ class Blog extends Actor {
 		}
 
 		if ( ! $icon_url ) {
-			// fallback to default icon
+			// Fallback to default icon.
 			$icon_url = plugins_url( '/assets/img/wp-logo.png', ACTIVITYPUB_PLUGIN_FILE );
 		}
 
@@ -244,7 +253,7 @@ class Blog extends Actor {
 	/**
 	 * Get the User-Header-Image.
 	 *
-	 * @return array|null The User-Header-Image.
+	 * @return string[]|null The User-Header-Image.
 	 */
 	public function get_image() {
 		$header_image = get_option( 'activitypub_header_image' );
@@ -268,28 +277,66 @@ class Blog extends Actor {
 		return null;
 	}
 
+	/**
+	 * Get the published date.
+	 *
+	 * @return string The published date.
+	 */
 	public function get_published() {
-		$first_post = new WP_Query(
+		$published = \get_option( 'activitypub_blog_published' );
+
+		if ( $published ) {
+			return $published;
+		}
+
+		// Backfill from the first federated post.
+		$first_federated = new \WP_Query(
 			array(
-				'orderby' => 'date',
-				'order'   => 'ASC',
-				'number'  => 1,
+				'orderby'                => 'date',
+				'order'                  => 'ASC',
+				'posts_per_page'         => 1,
+				'post_status'            => 'publish',
+				'no_found_rows'          => true,
+				'ignore_sticky_posts'    => true,
+				'update_post_meta_cache' => false,
+				'update_post_term_cache' => false,
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+				'meta_query'             => array(
+					array(
+						'key'     => 'activitypub_status',
+						'compare' => 'EXISTS',
+					),
+				),
 			)
 		);
 
-		if ( ! empty( $first_post->posts[0] ) ) {
-			$time = \strtotime( $first_post->posts[0]->post_date_gmt );
+		if ( ! empty( $first_federated->posts[0] ) ) {
+			$time = \strtotime( $first_federated->posts[0]->post_date_gmt );
 		} else {
 			$time = \time();
 		}
 
-		return \gmdate( 'Y-m-d\TH:i:s\Z', $time );
+		$published = \gmdate( ACTIVITYPUB_DATE_TIME_RFC3339, $time );
+
+		\update_option( 'activitypub_blog_published', $published, false );
+
+		return $published;
 	}
 
+	/**
+	 * Get the canonical URL.
+	 *
+	 * @return string|null The canonical URL.
+	 */
 	public function get_canonical_url() {
 		return \home_url();
 	}
 
+	/**
+	 * Get the Moderators endpoint.
+	 *
+	 * @return string|null The Moderators endpoint.
+	 */
 	public function get_moderators() {
 		if ( is_single_user() || 'Group' !== $this->get_type() ) {
 			return null;
@@ -298,6 +345,11 @@ class Blog extends Actor {
 		return get_rest_url_by_path( 'collections/moderators' );
 	}
 
+	/**
+	 * Get attributedTo value.
+	 *
+	 * @return string|null The attributedTo value.
+	 */
 	public function get_attributed_to() {
 		if ( is_single_user() || 'Group' !== $this->get_type() ) {
 			return null;
@@ -306,14 +358,24 @@ class Blog extends Actor {
 		return get_rest_url_by_path( 'collections/moderators' );
 	}
 
+	/**
+	 * Get the public key information.
+	 *
+	 * @return string[] The public key.
+	 */
 	public function get_public_key() {
 		return array(
-			'id'       => $this->get_id() . '#main-key',
-			'owner'    => $this->get_id(),
-			'publicKeyPem' => Signature::get_public_key_for( $this->get__id() ),
+			'id'           => $this->get_id() . '#main-key',
+			'owner'        => $this->get_id(),
+			'publicKeyPem' => Actors::get_public_key( $this->get__id() ),
 		);
 	}
 
+	/**
+	 * Returns whether posting is restricted to mods.
+	 *
+	 * @return bool|null True if posting is restricted to mods, null if not applicable.
+	 */
 	public function get_posting_restricted_to_mods() {
 		if ( 'Group' === $this->get_type() ) {
 			return true;
@@ -358,16 +420,20 @@ class Blog extends Actor {
 		return get_rest_url_by_path( sprintf( 'actors/%d/following', $this->get__id() ) );
 	}
 
+	/**
+	 * Returns endpoints.
+	 *
+	 * @return string[]|null The endpoints.
+	 */
 	public function get_endpoints() {
-		$endpoints = null;
-
-		if ( ACTIVITYPUB_SHARED_INBOX_FEATURE ) {
-			$endpoints = array(
-				'sharedInbox' => get_rest_url_by_path( 'inbox' ),
-			);
-		}
-
-		return $endpoints;
+		return array(
+			'sharedInbox'                => get_rest_url_by_path( 'inbox' ),
+			'oauthAuthorizationEndpoint' => get_rest_url_by_path( 'oauth/authorize' ),
+			'oauthTokenEndpoint'         => get_rest_url_by_path( 'oauth/token' ),
+			'oauthRegistrationEndpoint'  => get_rest_url_by_path( 'oauth/clients' ),
+			'proxyUrl'                   => get_rest_url_by_path( 'proxy' ),
+			'proxyEventStream'           => get_rest_url_by_path( 'proxy/stream' ),
+		);
 	}
 
 	/**
@@ -380,6 +446,17 @@ class Blog extends Actor {
 	}
 
 	/**
+	 * Returns the Liked API endpoint.
+	 *
+	 * @since 8.1.0
+	 *
+	 * @return string The Liked endpoint.
+	 */
+	public function get_liked() {
+		return get_rest_url_by_path( sprintf( 'actors/%d/liked', $this->get__id() ) );
+	}
+
+	/**
 	 * Returns the Featured-API-Endpoint.
 	 *
 	 * @return string The Featured-Endpoint.
@@ -388,6 +465,20 @@ class Blog extends Actor {
 		return get_rest_url_by_path( sprintf( 'actors/%d/collections/featured', $this->get__id() ) );
 	}
 
+	/**
+	 * Returns the Featured-Tags-API-Endpoint.
+	 *
+	 * @return string The Featured-Tags-Endpoint.
+	 */
+	public function get_featured_tags() {
+		return get_rest_url_by_path( sprintf( 'actors/%d/collections/tags', $this->get__id() ) );
+	}
+
+	/**
+	 * Returns whether the site is indexable.
+	 *
+	 * @return bool Whether the site is indexable.
+	 */
 	public function get_indexable() {
 		if ( is_blog_public() ) {
 			return true;
@@ -397,7 +488,7 @@ class Blog extends Actor {
 	}
 
 	/**
-	 * Update the User-Name.
+	 * Update the Username.
 	 *
 	 * @param mixed $value The new value.
 	 * @return bool True if the attribute was updated, false otherwise.
@@ -407,34 +498,34 @@ class Blog extends Actor {
 	}
 
 	/**
-	* Update the User-Description.
-	*
-	* @param mixed $value The new value.
-	* @return bool True if the attribute was updated, false otherwise.
-	*/
+	 * Update the User description.
+	 *
+	 * @param mixed $value The new value.
+	 * @return bool True if the attribute was updated, false otherwise.
+	 */
 	public function update_summary( $value ) {
 		return \update_option( 'blogdescription', $value );
 	}
 
 	/**
-	* Update the User-Icon.
-	*
-	* @param mixed $value The new value.
-	* @return bool True if the attribute was updated, false otherwise.
-	*/
+	 * Update the User icon.
+	 *
+	 * @param mixed $value The new value.
+	 * @return bool True if the attribute was updated, false otherwise.
+	 */
 	public function update_icon( $value ) {
 		if ( ! wp_attachment_is_image( $value ) ) {
 			return false;
 		}
-		return \update_option( 'site_logo', $value ) && \update_option( 'site_icon', $value );
+		return \update_option( 'site_icon', $value );
 	}
 
 	/**
-	* Update the User-Header-Image.
-	*
-	* @param mixed $value The new value.
-	* @return bool True if the attribute was updated, false otherwise.
-	*/
+	 * Update the User-Header-Image.
+	 *
+	 * @param mixed $value The new value.
+	 * @return bool True if the attribute was updated, false otherwise.
+	 */
 	public function update_header( $value ) {
 		if ( ! wp_attachment_is_image( $value ) ) {
 			return false;
@@ -443,11 +534,11 @@ class Blog extends Actor {
 	}
 
 	/**
-	 * Get the User - Hashtags .
+	 * Get the User - Hashtags.
 	 *
 	 * @see https://docs.joinmastodon.org/spec/activitypub/#Hashtag
 	 *
-	 * @return array The User - Hashtags .
+	 * @return string[] The User - Hashtags.
 	 */
 	public function get_tag() {
 		$hashtags = array();
@@ -479,5 +570,42 @@ class Blog extends Actor {
 	public function get_attachment() {
 		$extra_fields = Extra_Fields::get_actor_fields( $this->_id );
 		return Extra_Fields::fields_to_attachments( $extra_fields );
+	}
+
+	/**
+	 * Returns the website hosts allowed to credit this blog.
+	 *
+	 * @return string[]|null The attribution domains or null if not found.
+	 */
+	public function get_attribution_domains() {
+		return get_attribution_domains();
+	}
+
+	/**
+	 * Returns the alsoKnownAs.
+	 *
+	 * @return string[] The alsoKnownAs.
+	 */
+	public function get_also_known_as() {
+		$also_known_as = array(
+			\add_query_arg( 'author', $this->_id, \home_url( '/' ) ),
+			$this->get_url(),
+			$this->get_alternate_url(),
+		);
+
+		$also_known_as = array_merge( $also_known_as, \get_option( 'activitypub_blog_user_also_known_as', array() ) );
+
+		return array_unique( $also_known_as );
+	}
+
+	/**
+	 * Returns the movedTo.
+	 *
+	 * @return string The movedTo.
+	 */
+	public function get_moved_to() {
+		$moved_to = \get_option( 'activitypub_blog_user_moved_to' );
+
+		return $moved_to && $moved_to !== $this->get_id() ? $moved_to : null;
 	}
 }

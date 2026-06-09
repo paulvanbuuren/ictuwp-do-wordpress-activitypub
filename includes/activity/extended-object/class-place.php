@@ -11,13 +11,27 @@ namespace Activitypub\Activity\Extended_Object;
 use Activitypub\Activity\Base_Object;
 
 /**
- * Event is an implementation of one of the
- * Activity Streams Event object type
+ * Place is an implementation of the Activity Streams Place object type.
  *
- * The Object is the primary base type for the Activity Streams
- * vocabulary.
+ * The Place object represents a logical or physical location.
  *
- * @see https://www.w3.org/TR/activitystreams-vocabulary/#dfn-event
+ * @see https://www.w3.org/TR/activitystreams-vocabulary/#dfn-place
+ *
+ * @method float|null        get_accuracy()  Gets the accuracy of position coordinates.
+ * @method array|string|null get_address()   Gets the address of the place.
+ * @method float|null        get_altitude()  Gets the altitude of the place.
+ * @method float|null        get_latitude()  Gets the latitude of the place.
+ * @method float|null        get_longitude() Gets the longitude of the place.
+ * @method float|null        get_radius()    Gets the radius from the given latitude and longitude.
+ * @method string|null       get_units()     Gets the measurement units for radius and altitude.
+ *
+ * @method Place set_accuracy( float $accuracy )      Sets the accuracy of position coordinates.
+ * @method Place set_address( array|string $address ) Sets the address of the place.
+ * @method Place set_altitude( float $altitude )      Sets the altitude of the place.
+ * @method Place set_latitude( float $latitude )      Sets the latitude of the place.
+ * @method Place set_longitude( float $longitude )    Sets the longitude of the place.
+ * @method Place set_radius( float $radius )          Sets the radius from the given latitude and longitude.
+ * @method Place set_units( string $units )           Sets the measurement units for radius and altitude.
  */
 class Place extends Base_Object {
 	/**
@@ -38,8 +52,8 @@ class Place extends Base_Object {
 	protected $accuracy;
 
 	/**
-	 * Indicates the altitude of a place. The measurement units is indicated using the units property.
-	 * If units is not specified, the default is assumed to be "m" indicating meters.
+	 * Indicates the altitude of a place. The measurement unit is indicated using the unit's property.
+	 * If unit is not specified, the default is assumed to be "m" indicating meters.
 	 *
 	 * @see https://www.w3.org/TR/activitystreams-vocabulary/#dfn-altitude
 	 * @var float xsd:float
@@ -63,22 +77,34 @@ class Place extends Base_Object {
 	protected $longitude;
 
 	/**
+	 * The radius from the given latitude and longitude for a Place.
+	 *
 	 * @see https://www.w3.org/TR/activitystreams-vocabulary/#dfn-radius
 	 * @var float
 	 */
 	protected $radius;
 
 	/**
+	 * Specifies the measurement units for the `radius` and `altitude` properties.
+	 *
 	 * @see https://www.w3.org/TR/activitystreams-vocabulary/#dfn-units
 	 * @var string
 	 */
 	protected $units;
 
 	/**
-	 * @var Postal_Address|string
+	 * The address of the place.
+	 *
+	 * @see https://schema.org/PostalAddress
+	 * @var array|string
 	 */
 	protected $address;
 
+	/**
+	 * Set the address of the place.
+	 *
+	 * @param array|string $address The address of the place.
+	 */
 	public function set_address( $address ) {
 		if ( is_string( $address ) || is_array( $address ) ) {
 			$this->address = $address;

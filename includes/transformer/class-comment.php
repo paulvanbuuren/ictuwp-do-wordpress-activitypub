@@ -1,21 +1,26 @@
 <?php
+/**
+ * WordPress Comment Transformer file.
+ *
+ * @package Activitypub
+ */
+
 namespace Activitypub\Transformer;
 
-use WP_Comment;
-use WP_Comment_Query;
-
-use Activitypub\Webfinger;
+use Activitypub\Collection\Actors;
+use Activitypub\Collection\Replies;
 use Activitypub\Comment as Comment_Utils;
 use Activitypub\Model\Blog;
-use Activitypub\Collection\Users;
-use Activitypub\Transformer\Base;
+use Activitypub\Sanitize;
+use Activitypub\Webfinger;
 
-use function Activitypub\is_single_user;
-use function Activitypub\get_rest_url_by_path;
 use function Activitypub\get_comment_ancestors;
+use function Activitypub\get_rest_url_by_path;
+use function Activitypub\is_single_user;
+use function Activitypub\was_comment_received;
 
 /**
- * WordPress Comment Transformer
+ * WordPress Comment Transformer.
  *
  * The Comment Transformer is responsible for transforming a WP_Comment object into different
  * Object-Types.
@@ -26,43 +31,30 @@ use function Activitypub\get_comment_ancestors;
  */
 class Comment extends Base {
 	/**
-	 * Returns the User-ID of the WordPress Comment.
+	 * The User as Actor Object.
 	 *
-	 * @return int The User-ID of the WordPress Comment
+	 * @var \Activitypub\Activity\Actor
 	 */
-	public function get_wp_user_id() {
-		return $this->wp_object->user_id;
-	}
+	private $actor_object = null;
 
 	/**
-	 * Change the User-ID of the WordPress Comment.
+	 * Transforms the WP_Comment object to an ActivityPub Object.
 	 *
-	 * @return int The User-ID of the WordPress Comment
-	 */
-	public function change_wp_user_id( $user_id ) {
-		$this->wp_object->user_id = $user_id;
-	}
-
-	/**
-	 * Transforms the WP_Comment object to an ActivityPub Object
-	 *
-	 * @see \Activitypub\Activity\Base_Object
-	 *
-	 * @return \Activitypub\Activity\Base_Object The ActivityPub Object
+	 * @return \Activitypub\Activity\Base_Object The ActivityPub Object.
 	 */
 	public function to_object() {
-		$comment = $this->wp_object;
+		$comment = $this->item;
 		$object  = parent::to_object();
 
 		$object->set_url( $this->get_id() );
 		$object->set_type( 'Note' );
 
 		$published = \strtotime( $comment->comment_date_gmt );
-		$object->set_published( \gmdate( 'Y-m-d\TH:i:s\Z', $published ) );
+		$object->set_published( \gmdate( ACTIVITYPUB_DATE_TIME_RFC3339, $published ) );
 
 		$updated = \get_comment_meta( $comment->comment_ID, 'activitypub_comment_modified', true );
 		if ( $updated > $published ) {
-			$object->set_updated( \gmdate( 'Y-m-d\TH:i:s\Z', $updated ) );
+			$object->set_updated( \gmdate( ACTIVITYPUB_DATE_TIME_RFC3339, $updated ) );
 		}
 
 		$object->set_content_map(
@@ -70,16 +62,36 @@ class Comment extends Base {
 				$this->get_locale() => $this->get_content(),
 			)
 		);
-		$path = sprintf( 'actors/%d/followers', intval( $comment->comment_author ) );
-
-		$object->set_to(
-			array(
-				'https://www.w3.org/ns/activitystreams#Public',
-				get_rest_url_by_path( $path ),
-			)
-		);
 
 		return $object;
+	}
+
+	/**
+	 * Get the content visibility.
+	 *
+	 * @return string The content visibility.
+	 */
+	public function get_content_visibility() {
+		if ( $this->content_visibility ) {
+			return $this->content_visibility;
+		}
+
+		$comment = $this->item;
+		$post    = \get_post( $comment->comment_post_ID );
+
+		if ( ! $post ) {
+			return ACTIVITYPUB_CONTENT_VISIBILITY_PUBLIC;
+		}
+
+		$content_visibility = \get_post_meta( $post->ID, 'activitypub_content_visibility', true );
+
+		if ( ! $content_visibility ) {
+			return ACTIVITYPUB_CONTENT_VISIBILITY_PUBLIC;
+		}
+
+		$this->content_visibility = $content_visibility;
+
+		return $this->content_visibility;
 	}
 
 	/**
@@ -90,12 +102,12 @@ class Comment extends Base {
 	 * @return string The User-URL.
 	 */
 	protected function get_attributed_to() {
-		if ( is_single_user() ) {
-			$user = new Blog();
-			return $user->get_url();
+		// If the comment was received via ActivityPub, return the author URL.
+		if ( was_comment_received( $this->item ) ) {
+			return $this->item->comment_author_url;
 		}
 
-		return Users::get_by_id( $this->wp_object->user_id )->get_url();
+		return $this->get_actor_object()->get_id();
 	}
 
 	/**
@@ -106,28 +118,52 @@ class Comment extends Base {
 	 * @return string The content.
 	 */
 	protected function get_content() {
-		// phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
-		$comment = $this->wp_object;
-		$content = $comment->comment_content;
+		$comment  = $this->item;
+		$content  = $comment->comment_content;
+		$mentions = '';
 
+		foreach ( $this->extract_reply_context() as $acct => $url ) {
+			$mentions .= sprintf(
+				'<a rel="mention" class="u-url mention" href="%1$s" title="%2$s">%3$s</a> ',
+				esc_url( $url ),
+				esc_attr( $acct ),
+				esc_html( '@' . strtok( $acct, '@' ) )
+			);
+		}
+		$content = $mentions . $content;
+
+		/**
+		 * Filter the content of the comment.
+		 *
+		 * @param string      $content The content of the comment.
+		 * @param \WP_Comment $comment The comment object.
+		 * @param array       $args    The arguments.
+		 *
+		 * @return string The filtered content of the comment.
+		 */
 		$content = \apply_filters( 'comment_text', $content, $comment, array() );
-		$content = \preg_replace( '/[\n\r\t]/', '', $content );
-		$content = \trim( $content );
-		$content = \apply_filters( 'activitypub_the_content', $content, $comment );
+		$content = Sanitize::clean_html( $content );
+		$content = Sanitize::strip_whitespace( $content );
 
-		return $content;
+		/**
+		 * Filter the content of the comment.
+		 *
+		 * @param string      $content The content of the comment.
+		 * @param \WP_Comment $comment The comment object.
+		 *
+		 * @return string The filtered content of the comment.
+		 */
+		return \apply_filters( 'activitypub_the_content', $content, $comment );
 	}
 
 	/**
 	 * Returns the in-reply-to for the ActivityPub Item.
 	 *
-	 * @return int The URL of the in-reply-to.
+	 * @return false|string|null The URL of the in-reply-to.
 	 */
 	protected function get_in_reply_to() {
-		$comment = $this->wp_object;
-
+		$comment        = $this->item;
 		$parent_comment = null;
-		$in_reply_to    = null;
 
 		if ( $comment->comment_parent ) {
 			$parent_comment = \get_comment( $comment->comment_parent );
@@ -154,53 +190,37 @@ class Comment extends Base {
 	 * @return string ActivityPub URI for comment
 	 */
 	protected function get_id() {
-		$comment = $this->wp_object;
+		$comment = $this->item;
 		return Comment_Utils::generate_id( $comment );
 	}
 
 	/**
-	 * Returns a list of Mentions, used in the Comment.
+	 * Returns the User-Object of the Author of the Post.
 	 *
-	 * @see https://docs.joinmastodon.org/spec/activitypub/#Mention
+	 * If `single_user` mode is enabled, the Blog-User is returned.
 	 *
-	 * @return array The list of Mentions.
+	 * @return \Activitypub\Activity\Actor The User-Object.
 	 */
-	protected function get_cc() {
-		$cc = array();
-
-		$mentions = $this->get_mentions();
-		if ( $mentions ) {
-			foreach ( $mentions as $url ) {
-				$cc[] = $url;
-			}
+	protected function get_actor_object() {
+		if ( $this->actor_object ) {
+			return $this->actor_object;
 		}
 
-		return array_unique( $cc );
-	}
+		$blog_user          = new Blog();
+		$this->actor_object = $blog_user;
 
-	/**
-	 * Returns a list of Tags, used in the Comment.
-	 *
-	 * This includes Hash-Tags and Mentions.
-	 *
-	 * @return array The list of Tags.
-	 */
-	protected function get_tag() {
-		$tags = array();
-
-		$mentions = $this->get_mentions();
-		if ( $mentions ) {
-			foreach ( $mentions as $mention => $url ) {
-				$tag = array(
-					'type' => 'Mention',
-					'href' => \esc_url( $url ),
-					'name' => \esc_html( $mention ),
-				);
-				$tags[] = $tag;
-			}
+		if ( is_single_user() ) {
+			return $blog_user;
 		}
 
-		return \array_unique( $tags, SORT_REGULAR );
+		$user = Actors::get_by_id( $this->item->user_id );
+
+		if ( $user && ! is_wp_error( $user ) ) {
+			$this->actor_object = $user;
+			return $user;
+		}
+
+		return $blog_user;
 	}
 
 	/**
@@ -211,7 +231,16 @@ class Comment extends Base {
 	protected function get_mentions() {
 		\add_filter( 'activitypub_extract_mentions', array( $this, 'extract_reply_context' ) );
 
-		return apply_filters( 'activitypub_extract_mentions', array(), $this->wp_object->comment_content, $this->wp_object );
+		/**
+		 * Filter the mentions in the comment.
+		 *
+		 * @param array       $mentions The list of mentions.
+		 * @param string      $content  The content of the comment.
+		 * @param \WP_Comment $comment  The comment object.
+		 *
+		 * @return array The filtered list of mentions.
+		 */
+		return apply_filters( 'activitypub_extract_mentions', array(), $this->item->comment_content, $this->item );
 	}
 
 	/**
@@ -220,12 +249,12 @@ class Comment extends Base {
 	 * @return array The list of ancestors.
 	 */
 	protected function get_comment_ancestors() {
-		$ancestors = get_comment_ancestors( $this->wp_object );
+		$ancestors = get_comment_ancestors( $this->item );
 
-		// Now that we have the full tree of ancestors, only return the ones received from the fediverse
+		// Now that we have the full tree of ancestors, only return the ones received from the fediverse.
 		return array_filter(
 			$ancestors,
-			function ( $comment_id ) {
+			static function ( $comment_id ) {
 				return \get_comment_meta( $comment_id, 'protocol', true ) === 'activitypub';
 			}
 		);
@@ -235,13 +264,13 @@ class Comment extends Base {
 	 * Collect all other Users that participated in this comment-thread
 	 * to send them a notification about the new reply.
 	 *
-	 * @param array $mentions The already mentioned ActivityPub users
+	 * @param array $mentions Optional. The already mentioned ActivityPub users. Default empty array.
 	 *
 	 * @return array The list of all Repliers.
 	 */
-	public function extract_reply_context( $mentions ) {
-		// Check if `$this->wp_object` is a WP_Comment
-		if ( 'WP_Comment' !== get_class( $this->wp_object ) ) {
+	public function extract_reply_context( $mentions = array() ) {
+		// Check if `$this->item` is a WP_Comment.
+		if ( 'WP_Comment' !== get_class( $this->item ) ) {
 			return $mentions;
 		}
 
@@ -255,7 +284,7 @@ class Comment extends Base {
 			if ( $comment && ! empty( $comment->comment_author_url ) ) {
 				$acct = Webfinger::uri_to_acct( $comment->comment_author_url );
 				if ( $acct && ! is_wp_error( $acct ) ) {
-					$acct = str_replace( 'acct:', '@', $acct );
+					$acct              = str_replace( 'acct:', '@', $acct );
 					$mentions[ $acct ] = $comment->comment_author_url;
 				}
 			}
@@ -265,23 +294,126 @@ class Comment extends Base {
 	}
 
 	/**
-	 * Returns the locale of the post.
+	 * Returns the updated date of the comment.
 	 *
-	 * @return string The locale of the post.
+	 * @return string|null The updated date of the comment.
 	 */
-	public function get_locale() {
-		$comment_id = $this->wp_object->ID;
-		$lang       = \strtolower( \strtok( \get_locale(), '_-' ) );
+	public function get_updated() {
+		$updated   = \get_comment_meta( $this->item->comment_ID, 'activitypub_comment_modified', true );
+		$published = \get_comment_meta( $this->item->comment_ID, 'activitypub_comment_published', true );
+
+		if ( $updated > $published ) {
+			return \gmdate( ACTIVITYPUB_DATE_TIME_RFC3339, $updated );
+		}
+
+		return null;
+	}
+
+	/**
+	 * Returns the published date of the comment.
+	 *
+	 * @return string The published date of the comment.
+	 */
+	public function get_published() {
+		return \gmdate( ACTIVITYPUB_DATE_TIME_RFC3339, \strtotime( $this->item->comment_date_gmt ) );
+	}
+
+	/**
+	 * Returns the URL of the comment.
+	 *
+	 * @return string The URL of the comment.
+	 */
+	public function get_url() {
+		return $this->get_id();
+	}
+
+	/**
+	 * Returns the type of the comment.
+	 *
+	 * @return string The type of the comment.
+	 */
+	public function get_type() {
+		return 'Note';
+	}
+
+	/**
+	 * Get the context of the post.
+	 *
+	 * @see https://www.w3.org/TR/activitystreams-vocabulary/#dfn-context
+	 *
+	 * @return string The context of the post.
+	 */
+	protected function get_context() {
+		if ( $this->item->comment_post_ID ) {
+			return get_rest_url_by_path( sprintf( 'posts/%d/context', $this->item->comment_post_ID ) );
+		}
+
+		return null;
+	}
+
+	/**
+	 * Get the replies Collection.
+	 *
+	 * @return array|null The replies collection on success or null on failure.
+	 */
+	public function get_replies() {
+		return Replies::get_collection( $this->item );
+	}
+
+	/**
+	 * Get the attachment for the comment.
+	 *
+	 * Extracts images from comment content and returns them as ActivityPub attachments.
+	 *
+	 * @return array The attachments array for ActivityPub.
+	 */
+	protected function get_attachment() {
+		$max_media = \get_option( 'activitypub_max_image_attachments', \ACTIVITYPUB_MAX_IMAGE_ATTACHMENTS );
 
 		/**
-		 * Filter the locale of the comment.
+		 * Filters the maximum number of media attachments allowed in a comment.
 		 *
-		 * @param string  $lang    The locale of the comment.
-		 * @param int     $comment_id The comment ID.
-		 * @param WP_Post $post    The comment object.
-		 *
-		 * @return string The filtered locale of the comment.
+		 * @param int         $max_media Maximum number of media attachments.
+		 * @param \WP_Comment $item      The comment object.
 		 */
-		return apply_filters( 'activitypub_comment_locale', $lang, $comment_id, $this->wp_object );
+		$max_media = (int) \apply_filters( 'activitypub_max_image_attachments', $max_media, $this->item );
+
+		if ( 0 === $max_media ) {
+			return array();
+		}
+
+		$media = array(
+			'image' => array(),
+			'audio' => array(),
+			'video' => array(),
+		);
+
+		// Get comment content and parse for image embeds.
+		$media = $this->parse_html_images( $media, $max_media, $this->item->comment_content );
+		$media = $this->filter_unique_attachments( $media['image'] );
+		$media = \array_slice( $media, 0, $max_media );
+
+		/**
+		 * Filter the attachment IDs for a comment.
+		 *
+		 * @param array       $media The media array.
+		 * @param \WP_Comment $item  The comment object.
+		 *
+		 * @return array The filtered attachment IDs.
+		 */
+		$media = \apply_filters( 'activitypub_comment_attachment_ids', $media, $this->item );
+
+		// Transform to ActivityStreams format using Base class method.
+		$attachments = \array_filter( \array_map( array( $this, 'transform_attachment' ), $media ) );
+
+		/**
+		 * Filter the attachments for a comment.
+		 *
+		 * @param array       $attachments The attachments.
+		 * @param \WP_Comment $item        The comment object.
+		 *
+		 * @return array The filtered attachments.
+		 */
+		return \apply_filters( 'activitypub_comment_attachments', $attachments, $this->item );
 	}
 }

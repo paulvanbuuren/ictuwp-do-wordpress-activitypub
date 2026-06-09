@@ -3,11 +3,14 @@
  * Inspired by the PHP ActivityPub Library by @Landrok
  *
  * @link https://github.com/landrok/activitypub
+ *
+ * @package Activitypub
  */
 
 namespace Activitypub\Activity;
 
-use Activitypub\Activity\Base_Object;
+use Activitypub\Activity\Extended_Object\Event;
+use Activitypub\Activity\Extended_Object\Place;
 
 /**
  * \Activitypub\Activity\Activity implements the common
@@ -15,13 +18,75 @@ use Activitypub\Activity\Base_Object;
  *
  * @see https://www.w3.org/TR/activitystreams-core/#activities
  * @see https://www.w3.org/TR/activitystreams-core/#intransitiveactivities
+ *
+ * @method string|array                  get_actor()      Gets one or more entities that performed or are expected to perform the activity.
+ * @method string|array|null             get_instrument() Gets one or more objects used in the completion of an Activity.
+ * @method Base_Object|string|array|null get_object()     Gets the direct object of the activity.
+ * @method string|string[]|null          get_origin()     Gets the origin property of the activity.
+ * @method array|null                    get_replies()    Gets the collection of responses to this activity.
+ * @method string|null                   get_result()     Gets the result property of the activity.
+ * @method string|string[]|null          get_target()     Gets the target property of the activity.
+ *
+ * @method Activity set_actor( string|array $actor )           Sets one or more entities that performed the activity.
+ * @method Activity set_instrument( string|array $instrument ) Sets one or more objects used in the completion of an Activity.
+ * @method Activity set_origin( string|array|null $origin )    Sets the origin property of the activity.
+ * @method Activity set_replies( array $replies )              Sets the collection of responses to this activity.
+ * @method Activity set_result( string|null $result )          Sets the result property of the activity.
+ * @method Activity set_target( string|array|null $target )    Sets the target property of the activity.
  */
 class Activity extends Base_Object {
 	const JSON_LD_CONTEXT = array(
 		'https://www.w3.org/ns/activitystreams',
+		array(
+			'toot'           => 'http://joinmastodon.org/ns#',
+			'QuoteRequest'   => 'toot:QuoteRequest',
+			'blurhash'       => 'toot:blurhash',
+			'FeatureRequest' => 'https://w3id.org/fep/7aa9#FeatureRequest',
+		),
 	);
 
 	/**
+	 * The default types for Activities.
+	 *
+	 * @see https://www.w3.org/TR/activitystreams-vocabulary/#activity-types
+	 *
+	 * @var array
+	 */
+	const TYPES = array(
+		'Accept',
+		'Add',
+		'Announce',
+		'Arrive',
+		'Block',
+		'Create',
+		'Delete',
+		'Dislike',
+		'Follow',
+		'Flag',
+		'Ignore',
+		'Invite',
+		'Join',
+		'Leave',
+		'Like',
+		'Listen',
+		'Move',
+		'Offer',
+		'QuoteRequest', // @see https://codeberg.org/fediverse/fep/src/branch/main/fep/044f/fep-044f.md
+		'FeatureRequest', // @see https://w3id.org/fep/7aa9 (FEP-7aa9 draft)
+		'Read',
+		'Reject',
+		'Remove',
+		'TentativeAccept',
+		'TentativeReject',
+		'Travel',
+		'Undo',
+		'Update',
+		'View',
+	);
+
+	/**
+	 * The type of the object.
+	 *
 	 * @var string
 	 */
 	protected $type = 'Activity';
@@ -33,10 +98,7 @@ class Activity extends Base_Object {
 	 *
 	 * @see https://www.w3.org/TR/activitystreams-vocabulary/#dfn-object-term
 	 *
-	 * @var string
-	 *    | Base_Object
-	 *    | Link
-	 *    | null
+	 * @var string|Base_Object|array|null
 	 */
 	protected $object;
 
@@ -48,11 +110,7 @@ class Activity extends Base_Object {
 	 *
 	 * @see https://www.w3.org/TR/activitystreams-vocabulary/#dfn-actor
 	 *
-	 * @var string
-	 *    | \ActivityPhp\Type\Extended\AbstractActor
-	 *    | array<Actor>
-	 *    | array<Link>
-	 *    | Link
+	 * @var string|array
 	 */
 	protected $actor;
 
@@ -67,11 +125,7 @@ class Activity extends Base_Object {
 	 *
 	 * @see https://www.w3.org/TR/activitystreams-vocabulary/#dfn-target
 	 *
-	 * @var string
-	 *    | ObjectType
-	 *    | array<ObjectType>
-	 *    | Link
-	 *    | array<Link>
+	 * @var string|array|null
 	 */
 	protected $target;
 
@@ -83,10 +137,7 @@ class Activity extends Base_Object {
 	 *
 	 * @see https://www.w3.org/TR/activitystreams-vocabulary/#dfn-result
 	 *
-	 * @var string
-	 *    | ObjectType
-	 *    | Link
-	 *    | null
+	 * @var string|Base_Object|null
 	 */
 	protected $result;
 
@@ -98,10 +149,7 @@ class Activity extends Base_Object {
 	 *
 	 * @see https://www.w3.org/TR/activitystreams-vocabulary/#dfn-replies
 	 *
-	 * @var array
-	 *    | ObjectType
-	 *    | Link
-	 *    | null
+	 * @var array|null
 	 */
 	protected $replies;
 
@@ -115,10 +163,7 @@ class Activity extends Base_Object {
 	 *
 	 * @see https://www.w3.org/TR/activitystreams-vocabulary/#dfn-origin
 	 *
-	 * @var string
-	 *    | ObjectType
-	 *    | Link
-	 *    | null
+	 * @var string|array|null
 	 */
 	protected $origin;
 
@@ -128,10 +173,7 @@ class Activity extends Base_Object {
 	 *
 	 * @see https://www.w3.org/TR/activitystreams-vocabulary/#dfn-instrument
 	 *
-	 * @var string
-	 *    | ObjectType
-	 *    | Link
-	 *    | null
+	 * @var string|array|null
 	 */
 	protected $instrument;
 
@@ -139,29 +181,51 @@ class Activity extends Base_Object {
 	 * Set the object and copy Object properties to the Activity.
 	 *
 	 * Any to, bto, cc, bcc, and audience properties specified on the object
-	 * MUST be copied over to the new Create activity by the server.
+	 * MUST be copied over to the new "Create" activity by the server.
 	 *
 	 * @see https://www.w3.org/TR/activitypub/#object-without-create
 	 *
-	 * @param string|Base_Objectr|Link|null $object
-	 *
-	 * @return void
+	 * @param array|string|Base_Object|Activity|Actor|null $data Activity object.
 	 */
-	public function set_object( $object ) {
-		// convert array to object
-		if ( is_array( $object ) ) {
-			$object = self::init_from_array( $object );
+	public function set_object( $data ) {
+		$object = $data;
+
+		// Convert array to appropriate object type.
+		if ( is_array( $data ) ) {
+			if ( array_is_list( $data ) ) {
+				$object = array_map( array( $this, 'maybe_convert_to_object' ), $data );
+			} else {
+				$object = $this->maybe_convert_to_object( $data );
+			}
 		}
 
-		// set object
 		$this->set( 'object', $object );
+		$this->pre_fill_activity_from_object();
+	}
 
+	/**
+	 * Fills the Activity with the specified activity object.
+	 */
+	public function pre_fill_activity_from_object() {
+		$object = $this->get_object();
+
+		// Check if `$object` is a URL and use it to generate an ID then.
+		if ( is_string( $object ) && filter_var( $object, FILTER_VALIDATE_URL ) && ! $this->get_id() ) {
+			$this->set( 'id', $object . '#activity-' . strtolower( $this->get_type() ) . '-' . time() );
+
+			return;
+		}
+
+		// Check if `$object` is an object and copy some properties otherwise do nothing.
 		if ( ! is_object( $object ) ) {
 			return;
 		}
 
 		foreach ( array( 'to', 'bto', 'cc', 'bcc', 'audience' ) as $i ) {
-			$this->set( $i, $object->get( $i ) );
+			$value = $object->get( $i );
+			if ( $value && ! $this->get( $i ) ) {
+				$this->set( $i, $value );
+			}
 		}
 
 		if ( $object->get_published() && ! $this->get_published() ) {
@@ -176,16 +240,22 @@ class Activity extends Base_Object {
 			$this->set( 'actor', $object->get_attributed_to() );
 		}
 
-		if ( $object->get_in_reply_to() ) {
+		if ( $this->get_type() !== 'Announce' && $object->get_in_reply_to() && ! $this->get_in_reply_to() ) {
 			$this->set( 'in_reply_to', $object->get_in_reply_to() );
+		}
+
+		if ( $object->get_interaction_policy() && ! $this->get_interaction_policy() ) {
+			$this->set( 'interaction_policy', $object->get_interaction_policy() );
 		}
 
 		if ( $object->get_id() && ! $this->get_id() ) {
 			$id = strtok( $object->get_id(), '#' );
 			if ( $object->get_updated() ) {
 				$updated = $object->get_updated();
-			} else {
+			} elseif ( $object->get_published() ) {
 				$updated = $object->get_published();
+			} else {
+				$updated = time();
 			}
 			$this->set( 'id', $id . '#activity-' . strtolower( $this->get_type() ) . '-' . $updated );
 		}
@@ -197,14 +267,51 @@ class Activity extends Base_Object {
 	 * @return array $context A compacted JSON-LD context.
 	 */
 	public function get_json_ld_context() {
-		if ( $this->object instanceof Base_Object ) {
+		if ( \is_object( $this->object ) ) {
 			$class = get_class( $this->object );
 			if ( $class && $class::JSON_LD_CONTEXT ) {
-				// Without php 5.6 support this could be just: 'return  $this->object::JSON_LD_CONTEXT;'
+				// Without php 5.6 support this could be just: 'return  $this->object::JSON_LD_CONTEXT;'.
 				return $class::JSON_LD_CONTEXT;
 			}
 		}
 
 		return static::JSON_LD_CONTEXT;
+	}
+
+	/**
+	 * Convert data to the appropriate object type if it has an ActivityPub type.
+	 *
+	 * @param array|string|Base_Object|Activity|Actor|null $data The data to convert.
+	 *
+	 * @return Activity|Actor|Base_Object|Generic_Object|string|\WP_Error|null The converted object or original data.
+	 */
+	private function maybe_convert_to_object( $data ) {
+		if ( ! is_array( $data ) ) {
+			return $data;
+		}
+
+		$type = $data['type'] ?? null;
+
+		if ( in_array( $type, self::TYPES, true ) ) {
+			$object = self::init_from_array( $data );
+		} elseif ( in_array( $type, Actor::TYPES, true ) ) {
+			$object = Actor::init_from_array( $data );
+		} elseif ( in_array( $type, Base_Object::TYPES, true ) ) {
+			switch ( $type ) {
+				case 'Event':
+					$object = Event::init_from_array( $data );
+					break;
+				case 'Place':
+					$object = Place::init_from_array( $data );
+					break;
+				default:
+					$object = Base_Object::init_from_array( $data );
+					break;
+			}
+		} else {
+			$object = Generic_Object::init_from_array( $data );
+		}
+
+		return $object;
 	}
 }

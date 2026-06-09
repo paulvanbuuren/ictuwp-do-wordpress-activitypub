@@ -1,26 +1,53 @@
 <?php
+/**
+ * Transformer Factory Class file.
+ *
+ * @package Activitypub
+ */
+
 namespace Activitypub\Transformer;
 
-use WP_Error;
-use Activitypub\Transformer\Base;
-use Activitypub\Transformer\Post;
-use Activitypub\Transformer\Comment;
-use Activitypub\Transformer\Attachment;
+use Activitypub\Activity\Base_Object;
+use Activitypub\Comment as Comment_Helper;
+use Activitypub\Http;
+
+use function Activitypub\get_user_id;
+use function Activitypub\is_post_disabled;
+use function Activitypub\user_can_activitypub;
 
 /**
- * Transformer Factory
+ * Transformer Factory.
  */
 class Factory {
 	/**
-	 * @param  mixed $object                      The object to transform
-	 * @return \Activitypub\Transformer|\WP_Error The transformer to use, or an error.
+	 * Get the transformer for a given object.
+	 *
+	 * @param mixed $data The object to transform.
+	 *
+	 * @return Base|\WP_Error The transformer to use, or an error.
 	 */
-	public static function get_transformer( $object ) { // phpcs:ignore Universal.NamingConventions.NoReservedKeywordParameterNames.objectFound
-		if ( ! \is_object( $object ) ) {
-			return new WP_Error( 'invalid_object', __( 'Invalid object', 'activitypub' ) );
+	public static function get_transformer( $data ) {
+		// Early return for WP_Error objects.
+		if ( \is_wp_error( $data ) ) {
+			return $data;
 		}
 
-		$class = \get_class( $object );
+		if ( \is_string( $data ) && \filter_var( $data, FILTER_VALIDATE_URL ) ) {
+			$response = Http::get_remote_object( $data );
+
+			if ( \is_wp_error( $response ) ) {
+				return $response;
+			}
+
+			$class = 'json';
+			$data  = $response;
+		} elseif ( \is_array( $data ) || \is_string( $data ) ) {
+			$class = 'json';
+		} elseif ( \is_object( $data ) ) {
+			$class = \get_class( $data );
+		} else {
+			return new \WP_Error( 'invalid_object', __( 'Invalid object', 'activitypub' ) );
+		}
 
 		/**
 		 * Filter the transformer for a given object.
@@ -45,36 +72,54 @@ class Factory {
 		 *     return $transformer;
 		 * }, 10, 3 );
 		 *
-		 * @param Base   $transformer  The transformer to use.
-		 * @param mixed  $object       The object to transform.
-		 * @param string $object_class The class of the object to transform.
+		 * @param null|Base $transformer  The transformer to use. Default null.
+		 * @param mixed     $data         The object to transform.
+		 * @param string    $object_class The class of the object to transform.
 		 *
 		 * @return mixed The transformer to use.
 		 */
-		$transformer = \apply_filters( 'activitypub_transformer', null, $object, $class );
+		$transformer = \apply_filters( 'activitypub_transformer', null, $data, $class );
 
 		if ( $transformer ) {
 			if (
 				! \is_object( $transformer ) ||
 				! $transformer instanceof Base
 			) {
-				return new WP_Error( 'invalid_transformer', __( 'Invalid transformer', 'activitypub' ) );
+				return new \WP_Error( 'invalid_transformer', __( 'Invalid transformer', 'activitypub' ) );
 			}
 
 			return $transformer;
 		}
 
-		// use default transformer
+		// Use default transformer.
 		switch ( $class ) {
 			case 'WP_Post':
-				if ( 'attachment' === $object->post_type ) {
-					return new Attachment( $object );
+				if ( 'attachment' === $data->post_type && ! is_post_disabled( $data ) ) {
+					return new Attachment( $data );
+				} elseif ( ! is_post_disabled( $data ) && get_user_id( $data->post_author ) ) {
+					return new Post( $data );
 				}
-				return new Post( $object );
+				break;
 			case 'WP_Comment':
-				return new Comment( $object );
-			default:
-				return null;
+				if ( Comment_Helper::should_be_federated( $data ) ) {
+					return new Comment( $data );
+				}
+				break;
+			case 'WP_User':
+				if ( user_can_activitypub( $data->ID ) ) {
+					return new User( $data );
+				}
+				break;
+			case 'WP_Term':
+				return new Term( $data );
+			case 'json':
+				return new Json( $data );
 		}
+
+		if ( $data instanceof Base_Object ) {
+			return new Activity_Object( $data );
+		}
+
+		return new \WP_Error( 'invalid_object', __( 'Invalid object', 'activitypub' ) );
 	}
 }
