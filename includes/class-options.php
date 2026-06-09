@@ -448,6 +448,18 @@ class Options {
 
 		\register_setting(
 			'activitypub_blog',
+			'activitypub_blog_name',
+			array(
+				'type'              => 'string',
+				'description'       => \__( 'The display name for the blog profile.', 'activitypub' ),
+				'sanitize_callback' => 'sanitize_text_field',
+				'show_in_rest'      => true,
+				'default'           => \get_option( 'blogname' ),
+			)
+		);
+
+		\register_setting(
+			'activitypub_blog',
 			'activitypub_blog_identifier',
 			array(
 				'type'              => 'string',
